@@ -13,7 +13,7 @@ app.use(express.json());
 
 const LEMON_API_KEY = process.env.LEMON_API_KEY;
 
-// ✅ Quota check for license validation
+// ✅ License quota check with auto-activation
 app.post("/quota-check", async (req, res) => {
   const { licenseKey } = req.body;
 
@@ -22,7 +22,8 @@ app.post("/quota-check", async (req, res) => {
   }
 
   try {
-    const response = await axios.post(
+    // Step 1: Validate license
+    const validateRes = await axios.post(
       "https://api.lemonsqueezy.com/v1/licenses/validate",
       { license_key: licenseKey },
       {
@@ -34,23 +35,47 @@ app.post("/quota-check", async (req, res) => {
       }
     );
 
-      const isValid = response.data?.data?.valid === true;
+    const { valid, activation_limit, activations } = validateRes.data?.data || {};
 
-    if (isValid) {
-      return res.json({ allowed: true, limit: 1000 });
-    } else {
-      return res.json({ allowed: false });
+    if (!valid) {
+      return res.json({ allowed: false, reason: "License not valid" });
     }
+
+    const isActivated = (activations || []).length > 0;
+
+    // Step 2: Activate if not already
+    if (!isActivated && activation_limit > 0) {
+      await axios.post(
+        "https://api.lemonsqueezy.com/v1/licenses/activate",
+        {
+          license_key: licenseKey,
+          instance_name: "smartdraft-extension",
+          instance_id: `instance-${Date.now()}`
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${LEMON_API_KEY}`,
+            "Content-Type": "application/json",
+            Accept: "application/json"
+          }
+        }
+      );
+
+      console.log(`✅ Activated license ${licenseKey}`);
+    }
+
+    // Step 3: Allow usage
+    return res.json({ allowed: true, limit: 1000 });
+
   } catch (err) {
-    console.error("🔒 License validation failed:", err.response?.data || err.message);
+    console.error("❌ License check/activation failed:", err.response?.data || err.message);
     return res.status(500).json({ allowed: false, reason: "Validation server error" });
   }
 });
 
-// 📈 Increment endpoint
+// 📈 Draft usage increment (dummy tracking)
 app.post("/increment", (req, res) => {
   const { licenseKey } = req.body;
-
   if (!licenseKey) {
     return res.status(400).json({ success: false, error: "Missing licenseKey" });
   }
