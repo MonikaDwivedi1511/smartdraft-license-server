@@ -20,7 +20,8 @@ const LEMON_API_KEY = process.env.LEMON_API_KEY;
 async function tryActivateAndValidate(licenseKey) {
   try {
     console.log("⚙️ Attempting activation...");
-    await axios.post(
+
+    const activation = await axios.post(
       "https://api.lemonsqueezy.com/v1/licenses/activate",
       {
         license_key: licenseKey,
@@ -36,6 +37,7 @@ async function tryActivateAndValidate(licenseKey) {
     );
 
     console.log("✅ Activation success. Re-validating...");
+
     const recheck = await axios.post(
       "https://api.lemonsqueezy.com/v1/licenses/validate",
       { license_key: licenseKey },
@@ -48,12 +50,17 @@ async function tryActivateAndValidate(licenseKey) {
       }
     );
 
-    const recheckData = recheck.data?.data || {};
-    const isValid = recheckData.valid === true || recheckData.meta?.activated === true;
+    console.log("🔁 Recheck response:", recheck.data);
+
+    const isValid =
+      recheck.data?.data?.valid === true ||
+      recheck.data?.data?.meta?.activated === true ||
+      recheck.data?.data?.license_key === licenseKey;
+
     return isValid;
 
   } catch (err) {
-    console.error("🚫 Activation error:", err.response?.data || err.message);
+    console.error("🚫 Activation + recheck failed:", err.response?.data || err.message);
     return false;
   }
 }
