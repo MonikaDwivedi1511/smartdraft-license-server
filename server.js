@@ -39,12 +39,25 @@ app.post("/verify-license", async (req, res) => {
   }
 });
 
+const express = require("express");
+const cors = require("cors");
+const axios = require("axios");
+
+const app = express();
+app.use(cors({
+  origin: "*", // Adjust this in production
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
+app.use(express.json());
+
+const LEMON_API_KEY = process.env.LEMON_API_KEY;
 
 app.post("/quota-check", async (req, res) => {
   const { licenseKey } = req.body;
 
   if (!licenseKey || licenseKey.length < 10) {
-    return res.status(400).json({ allowed: false, reason: "Missing or short key" });
+    return res.status(400).json({ allowed: false, reason: "Invalid key" });
   }
 
   try {
@@ -60,13 +73,45 @@ app.post("/quota-check", async (req, res) => {
       }
     );
 
-    const isValid = response.data?.data?.valid === true;
-    return res.json({ allowed: isValid });
+    const isValid = response.data?.valid;
+    res.json({ allowed: isValid });
   } catch (err) {
-    console.error("🔒 Quota check failed:", err.response?.data || err.message);
-    return res.status(500).json({ allowed: false, reason: "Validation server error" });
+    console.error("License check failed", err.response?.data);
+    res.status(500).json({ allowed: false });
   }
 });
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`✅ License server running on port ${PORT}`));
+
+
+// app.post("/quota-check", async (req, res) => {
+//   const { licenseKey } = req.body;
+
+//   if (!licenseKey || licenseKey.length < 10) {
+//     return res.status(400).json({ allowed: false, reason: "Missing or short key" });
+//   }
+
+//   try {
+//     const response = await axios.post(
+//       "https://api.lemonsqueezy.com/v1/licenses/validate",
+//       { license_key: licenseKey },
+//       {
+//         headers: {
+//           Authorization: `Bearer ${LEMON_API_KEY}`,
+//           "Content-Type": "application/json",
+//           Accept: "application/json"
+//         }
+//       }
+//     );
+
+//     const isValid = response.data?.data?.valid === true;
+//     return res.json({ allowed: isValid });
+//   } catch (err) {
+//     console.error("🔒 Quota check failed:", err.response?.data || err.message);
+//     return res.status(500).json({ allowed: false, reason: "Validation server error" });
+//   }
+// });
 
 
 // // ✅ Alias to match frontend call → returns `allowed` instead of `valid`
