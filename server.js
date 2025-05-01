@@ -43,6 +43,10 @@ app.post("/verify-license", async (req, res) => {
 app.post("/quota-check", async (req, res) => {
   const { licenseKey } = req.body;
 
+  if (!licenseKey || licenseKey.length < 10) {
+    return res.status(400).json({ allowed: false, reason: "Missing or short key" });
+  }
+
   try {
     const response = await axios.post(
       "https://api.lemonsqueezy.com/v1/licenses/validate",
@@ -56,11 +60,11 @@ app.post("/quota-check", async (req, res) => {
       }
     );
 
-    const isValid = response.data?.data?.valid;
-    res.json({ allowed: isValid }); // ✅ important: FE expects `allowed`
+    const isValid = response.data?.data?.valid === true;
+    return res.json({ allowed: isValid });
   } catch (err) {
-    console.error("Quota check failed", err.response?.data);
-    res.status(500).json({ allowed: false });
+    console.error("🔒 Quota check failed:", err.response?.data || err.message);
+    return res.status(500).json({ allowed: false, reason: "Validation server error" });
   }
 });
 
