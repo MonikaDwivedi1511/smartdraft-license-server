@@ -34,7 +34,7 @@ app.post("/quota-check", async (req, res) => {
       }
     );
 
-    const isValid = response.data?.data?.valid === true;
+      const isValid = response.data?.data?.valid === true;
 
     if (isValid) {
       return res.json({ allowed: true, limit: 1000 });
