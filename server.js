@@ -48,7 +48,10 @@ async function tryActivateAndValidate(licenseKey) {
       }
     );
 
-    return recheck.data?.data?.valid === true;
+    const recheckData = recheck.data?.data || {};
+    const isValid = recheckData.valid === true || recheckData.meta?.activated === true;
+    return isValid;
+
   } catch (err) {
     console.error("🚫 Activation error:", err.response?.data || err.message);
     return false;
