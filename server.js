@@ -43,14 +43,27 @@ app.post("/verify-license", async (req, res) => {
 app.post("/quota-check", async (req, res) => {
   const { licenseKey } = req.body;
 
-  // TEMP: Replace this with real logic later
-  if (!licenseKey || licenseKey.length < 10) {
-    return res.status(400).json({ allowed: false, reason: "Invalid key" });
-  }
+  try {
+    const response = await axios.post(
+      "https://api.lemonsqueezy.com/v1/licenses/validate",
+      { license_key: licenseKey },
+      {
+        headers: {
+          Authorization: `Bearer ${LEMON_API_KEY}`,
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        }
+      }
+    );
 
-  // Fake allow logic for testing
-  res.json({ allowed: true });
+    const isValid = response.data?.data?.valid;
+    res.json({ allowed: isValid }); // ✅ important: FE expects `allowed`
+  } catch (err) {
+    console.error("Quota check failed", err.response?.data);
+    res.status(500).json({ allowed: false });
+  }
 });
+
 
 // // ✅ Alias to match frontend call → returns `allowed` instead of `valid`
 // app.post("/quota-check", async (req, res) => {
@@ -70,7 +83,7 @@ app.post("/quota-check", async (req, res) => {
 //     );
 
 //     const isValid = response.data?.data?.valid;
-//     res.json({ allowed: isValid }); // frontend expects `allowed`
+//     res.json({ valid: isValid }); // frontend expects `allowed`
 //   } catch (err) {
 //     console.error("Quota check failed", err.response?.data);
 //     res.status(500).json({ allowed: false });
