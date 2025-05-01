@@ -5,7 +5,7 @@ const axios = require("axios");
 const app = express();
 
 app.use(cors({
-  origin: "*",  // Change to "https://mail.google.com" in production
+  origin: "*", // Replace with "https://mail.google.com" in production
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"]
 }));
@@ -13,7 +13,7 @@ app.use(express.json());
 
 const LEMON_API_KEY = process.env.LEMON_API_KEY;
 
-// ✅ License quota check with auto-activation
+// 🔐 Quota check + Auto-activate if valid
 app.post("/quota-check", async (req, res) => {
   const { licenseKey } = req.body;
 
@@ -22,7 +22,7 @@ app.post("/quota-check", async (req, res) => {
   }
 
   try {
-    // Step 1: Validate license
+    // Step 1: Validate the license
     const validateRes = await axios.post(
       "https://api.lemonsqueezy.com/v1/licenses/validate",
       { license_key: licenseKey },
@@ -35,36 +35,40 @@ app.post("/quota-check", async (req, res) => {
       }
     );
 
-    const { valid, activation_limit, activations } = validateRes.data?.data || {};
+    const licenseData = validateRes.data?.data;
 
-    if (!valid) {
+    if (!licenseData?.valid) {
       return res.json({ allowed: false, reason: "License not valid" });
     }
 
-    const isActivated = (activations || []).length > 0;
+    // If not activated, attempt activation
+    const isActivated = licenseData.activation && licenseData.activation.id;
+    const activationLimit = licenseData.meta?.activation_limit || 1;
 
-    // Step 2: Activate if not already
-    if (!isActivated && activation_limit > 0) {
-      await axios.post(
-        "https://api.lemonsqueezy.com/v1/licenses/activate",
-        {
-          license_key: licenseKey,
-          instance_name: "smartdraft-extension",
-          instance_id: `instance-${Date.now()}`
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${LEMON_API_KEY}`,
-            "Content-Type": "application/json",
-            Accept: "application/json"
+    if (!isActivated && activationLimit > 0) {
+      try {
+        await axios.post(
+          "https://api.lemonsqueezy.com/v1/licenses/activate",
+          {
+            license_key: licenseKey,
+            instance_name: "smartdraft-extension"
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${LEMON_API_KEY}`,
+              "Content-Type": "application/json",
+              Accept: "application/json"
+            }
           }
-        }
-      );
-
-      console.log(`✅ Activated license ${licenseKey}`);
+        );
+        console.log(`🎫 License activated: ${licenseKey}`);
+      } catch (activationErr) {
+        console.error("⚠️ Activation failed:", activationErr.response?.data || activationErr.message);
+        return res.json({ allowed: false, reason: "Activation failed" });
+      }
     }
 
-    // Step 3: Allow usage
+    // ✅ Success
     return res.json({ allowed: true, limit: 1000 });
 
   } catch (err) {
@@ -73,7 +77,7 @@ app.post("/quota-check", async (req, res) => {
   }
 });
 
-// 📈 Draft usage increment (dummy tracking)
+// 📈 Increment endpoint (dummy)
 app.post("/increment", (req, res) => {
   const { licenseKey } = req.body;
   if (!licenseKey) {
