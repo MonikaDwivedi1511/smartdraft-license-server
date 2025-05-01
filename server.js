@@ -51,12 +51,12 @@ async function tryActivateAndValidate(licenseKey) {
     );
 
     console.log("🔁 Recheck response:", recheck.data);
-
+    
     const isValid =
-      recheck.data?.data?.valid === true ||
-      recheck.data?.data?.meta?.activated === true ||
-      recheck.data?.data?.license_key === licenseKey;
-
+      recheck.data?.valid === true &&
+      recheck.data?.license_key?.status === "active" &&
+      recheck.data?.license_key?.key === licenseKey;
+    
     return isValid;
 
   } catch (err) {
@@ -87,7 +87,7 @@ app.post("/quota-check", async (req, res) => {
       }
     );
 
-    const isValid = response.data?.data?.valid === true;
+    const isValid = response.data?.valid === true;
 
     if (isValid) {
       console.log("✅ License valid");
