@@ -4,10 +4,11 @@ const axios = require("axios");
 
 const app = express();
 app.use(cors({
-  origin: "*", // Or set this to 'https://mail.google.com' in production
-  methods: ["GET", "POST"],
+  origin: "*", // For testing only; replace with "https://mail.google.com" in production
+  methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type"]
 }));
+;
 
 app.use(express.json());
 
@@ -31,7 +32,9 @@ app.post("/verify-license", async (req, res) => {
       }
     );
 
+    console.log("🔍 Lemon response:", response.data);
     const isValid = response.data?.data?.valid;
+
     res.json({ valid: isValid });
   } catch (err) {
     console.error("License check failed", err.response?.data);
