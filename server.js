@@ -43,9 +43,8 @@ async function validateLicense(licenseKey) {
       limit: 1000,
       expires_at: license?.expires_at || null,
       order_id: license?.order_id || null,
-      email: license?.user_email || null,
+      email: license?.user_email || null
     };
-
   } catch (err) {
     console.error("❌ validateLicense error:", err.response?.data || err.message);
     return { allowed: false, reason: "License validation error" };
@@ -74,38 +73,10 @@ async function tryActivateAndValidate(licenseKey) {
 
     console.log("✅ Activation success. Re-validating...");
 
-    const recheck = await axios.post(
-      "https://api.lemonsqueezy.com/v1/licenses/validate",
-      { license_key: licenseKey },
-      {
-        headers: {
-          Authorization: `Bearer ${LEMON_API_KEY}`,
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        }
-      }
-    );
-
-    const license = recheck?.data?.license_key;
-    const isValid = recheck?.data?.valid === true && license?.status === "active";
-
-    if (isValid) {
-      return {
-        valid: true,
-        license: {
-          key: license.key,
-          status: license.status,
-          expires_at: license.expires_at || null,
-          order_id: license.order_id || null,
-          customer_email: license.user_email || null,
-        }
-      };
-    }
-
-    return { valid: false };
+    return await validateLicense(licenseKey);
   } catch (err) {
     console.error("❌ Activation + recheck failed:", err.response?.data || err.message);
-    return { valid: false };
+    return { allowed: false, reason: "Activation failed" };
   }
 }
 
@@ -124,28 +95,15 @@ app.post("/quota-check", async (req, res) => {
 
     if (!result.allowed && result.reason === "License invalid or inactive") {
       console.log("🔁 License not valid. Trying activation flow...");
-      const activation = await tryActivateAndValidate(licenseKey);
-
-      if (activation.valid) {
-        return res.json({
-          allowed: true,
-          limit: 1000,
-          expires_at: activation.license.expires_at,
-          order_id: activation.license.order_id,
-          email: activation.license.customer_email || ""
-        });
-      } else {
-        return res.json({ allowed: false, reason: "License invalid or inactive" });
-      }
+      result = await tryActivateAndValidate(licenseKey);
     }
 
     return res.json(result);
-
   } catch (err) {
     console.error("❌ Validation/activation error:", err.response?.data || err.message);
     return res.status(500).json({
       allowed: false,
-      reason: "Server error during license check",
+      reason: "Server error during license check"
     });
   }
 });
