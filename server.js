@@ -1,122 +1,71 @@
-const express = require("express");
-const axios = require("axios");
+// ✅ panel.js
+async function checkQuotaBeforeGeneration(callback) {
+  chrome.storage.sync.get(["plan", "licenseKey", "draftsUsed", "licenseExpiry", "variantName"], async (data) => {
+    const {
+      plan = "trial",
+      licenseKey = "",
+      draftsUsed = 0,
+      licenseExpiry,
+      variantName = "Trial"
+    } = data;
 
-const app = express();
+    const localUsed = window.getCurrentDraftCount?.() || 0;
+    const totalUsed = Math.max(localUsed, draftsUsed);
+    const limit = plan === "paid" ? 1000 : 200;
 
-// ✅ CORS headers (including preflight)
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");  // Change to "https://mail.google.com" in production
-  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
-  next();
-});
-
-app.use(express.json());
-
-const LEMON_API_KEY = process.env.LEMON_API_KEY;
-
-// ✅ Try validate license (shared logic)
-async function validateLicense(licenseKey) {
-  try {
-    const response = await axios.post(
-      "https://api.lemonsqueezy.com/v1/licenses/validate",
-      { license_key: licenseKey },
-      {
-        headers: {
-          Authorization: `Bearer ${LEMON_API_KEY}`,
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        }
+    // ⏰ Local expiry check
+    if (plan === "paid" && licenseExpiry) {
+      const expiryTime = new Date(licenseExpiry).getTime();
+      if (Date.now() > expiryTime) {
+        console.warn("⛔ License expired (local)");
+        showToast("⛔ Your license has expired.");
+        showUpgradeModal();
+        return;
       }
-    );
-
-    const license = response?.data?.license_key;
-    const isValid = response?.data?.valid === true && license?.status === "active";
-
-    if (!isValid) {
-      return { allowed: false, reason: "License invalid or inactive" };
     }
 
-    return {
-      allowed: true,
-      limit: 1000,
-      expires_at: license?.expires_at || null,
-      order_id: license?.order_id || null,
-      email: license?.user_email || null
-    };
-  } catch (err) {
-    console.error("❌ validateLicense error:", err.response?.data || err.message);
-    return { allowed: false, reason: "License validation error" };
-  }
-}
+    // 🌐 Check server-side license
+    if (licenseKey) {
+      const activateBtn = document.getElementById("sd-activate-license");
+      if (activateBtn) activateBtn.textContent = "🔍 Validating...";
 
-// 🔁 Try to activate license if inactive
-async function tryActivateAndValidate(licenseKey) {
-  try {
-    console.log("⚙️ Attempting activation...");
+      try {
+        const res = await fetch("https://smartdraft-license-server.onrender.com/quota-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ licenseKey })
+        });
 
-    const activation = await axios.post(
-      "https://api.lemonsqueezy.com/v1/licenses/activate",
-      {
-        license_key: licenseKey,
-        instance_name: "smartdraft-extension"
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${LEMON_API_KEY}`,
-          "Content-Type": "application/json",
-          Accept: "application/json"
+        const result = await res.json();
+
+        if (!result.allowed) {
+          showToast(result.reason === "expired" ? "⛔ License expired. Please renew." : "❌ Invalid license key.");
+          showUpgradeModal();
+          return;
         }
+
+        // 📝 Update Chrome storage with new expiry/plan if any
+        chrome.storage.sync.set({
+          plan: "paid",
+          licenseExpiry: result.expires_at || null,
+          variantName: result.variant || "Monthly Plan"
+        });
+
+      } catch (err) {
+        console.error("❌ License server error:", err);
+        showToast("⚠️ Network error while checking license.");
+        return;
       }
-    );
-
-    console.log("✅ Activation success. Re-validating...");
-
-    return await validateLicense(licenseKey);
-  } catch (err) {
-    console.error("❌ Activation + recheck failed:", err.response?.data || err.message);
-    return { allowed: false, reason: "Activation failed" };
-  }
-}
-
-// ✅ Quota check endpoint
-app.post("/quota-check", async (req, res) => {
-  const { licenseKey } = req.body;
-
-  if (!licenseKey || licenseKey.length < 10) {
-    return res.status(400).json({ allowed: false, reason: "Invalid license key" });
-  }
-
-  try {
-    console.log("🔍 Validating license key:", licenseKey);
-
-    let result = await validateLicense(licenseKey);
-
-    if (!result.allowed && result.reason === "License invalid or inactive") {
-      console.log("🔁 License not valid. Trying activation flow...");
-      result = await tryActivateAndValidate(licenseKey);
     }
 
-    return res.json(result);
-  } catch (err) {
-    console.error("❌ Validation/activation error:", err.response?.data || err.message);
-    return res.status(500).json({
-      allowed: false,
-      reason: "Server error during license check"
-    });
-  }
-});
+    // 🚫 Quota check
+    if (totalUsed >= limit) {
+      console.warn(`🚫 Draft quota exceeded (${totalUsed}/${limit})`);
+      showToast(`🚫 You've used ${totalUsed}/${limit} drafts.`);
+      showUpgradeModal();
+      return;
+    }
 
-// 📈 Increment endpoint (dummy for now)
-app.post("/increment", (req, res) => {
-  const { licenseKey } = req.body;
-  if (!licenseKey) return res.status(400).json({ success: false, error: "Missing licenseKey" });
-
-  console.log(`📈 Increment received for license: ${licenseKey}`);
-  return res.json({ success: true });
-});
-
-// 🔊 Start server
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`✅ License server running on port ${PORT}`));
+    callback();
+  });
+}
