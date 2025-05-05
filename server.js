@@ -1,4 +1,3 @@
-npm install mongoose dotenv
 
 // // ✅ Full server.js with LemonSqueezy Variant, Expiry (renews_at), and Quota Check
 // const express = require("express");
