@@ -118,10 +118,12 @@
 // const PORT = process.env.PORT || 4000;
 // app.listen(PORT, () => console.log(`✅ License server running on port ${PORT}`));
 // server.js
+
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
+const QuotaLog = require("./models/QuotaLog");
 require("dotenv").config();
 
 const app = express();
@@ -227,6 +229,13 @@ app.post("/increment", async (req, res) => {
 
   await DraftUsage.create({ licenseKey, plan, variant });
   res.json({ success: true });
+
+  await QuotaLog.create({
+  licenseKey,
+  plan: licenseInfo.plan || "trial",
+  usedCount: newUsageCount
+});
+
 });
 
 // Track Events
