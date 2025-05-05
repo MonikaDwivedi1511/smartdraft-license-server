@@ -130,6 +130,10 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+const trackEventRoute = require("./routes/trackEvent");
+app.use("/", trackEventRoute);
+
+
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
@@ -240,25 +244,24 @@ app.post("/increment", async (req, res) => {
 
 // Track Events
 // POST /track-event
-app.post("/track-event", async (req, res) => {
-  const { licenseKey, event, metadata = {}, plan = "unknown" } = req.body;
+const Event = require("./models/Event");
 
+app.post("/track-event", async (req, res) => {
   try {
-    await AnalyticsEvent.create({
-      licenseKey,
+    const { event, timestamp, ...rest } = req.body;
+
+    await Event.create({
       event,
-      metadata,
-      plan,
-      timestamp: new Date(),
+      timestamp: new Date(timestamp),
+      ...rest
     });
 
-    res.json({ success: true });
+    res.status(200).json({ success: true });
   } catch (err) {
-    console.error("❌ Failed to store event:", err);
+    console.error("❌ Event logging failed:", err.message);
     res.status(500).json({ success: false });
   }
 });
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
