@@ -4,6 +4,8 @@ const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const QuotaLog = require("./models/QuotaLog");
 const DraftUsage = require("./models/DraftUsage");
+const Event = require("./models/Event");
+
 
 require("dotenv").config();
 
@@ -26,22 +28,22 @@ db.once("open", () => console.log("✅ MongoDB connected"));
 db.on("error", console.error);
 
 // MongoDB Schemas
-const DraftUsageSchema = new mongoose.Schema({
-  licenseKey: String,
-  plan: String, // trial or paid
-  variant: String,
-  timestamp: { type: Date, default: Date.now },
-});
+// const DraftUsageSchema = new mongoose.Schema({
+//   licenseKey: String,
+//   plan: String, // trial or paid
+//   variant: String,
+//   timestamp: { type: Date, default: Date.now },
+// });
 
-const EventSchema = new mongoose.Schema({
-  event: String,
-  licenseKey: String,
-  details: Object,
-  timestamp: { type: Date, default: Date.now },
-});
+// const EventSchema = new mongoose.Schema({
+//   event: String,
+//   licenseKey: String,
+//   details: Object,
+//   timestamp: { type: Date, default: Date.now },
+// });
 
-const DraftUsage = mongoose.model("DraftUsage", DraftUsageSchema);
-const TrackEvent = mongoose.model("TrackEvent", EventSchema);
+//const DraftUsage = mongoose.model("DraftUsage", DraftUsageSchema);
+//const TrackEvent = mongoose.model("TrackEvent", EventSchema);
 
 // LemonSqueezy License API setup
 const LEMON_API_KEY = process.env.LEMON_API_KEY;
@@ -125,7 +127,7 @@ app.post("/increment", async (req, res) => {
 
 // Track Events
 // POST /track-event
-const Event = require("./models/Event");
+//const Event = require("./models/Event");
 
 app.post("/track-event", async (req, res) => {
   try {
