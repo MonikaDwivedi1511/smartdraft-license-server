@@ -110,20 +110,20 @@ app.post("/quota-check", async (req, res) => {
 });
 
 // Increment Draft Usage
-app.post("/increment", async (req, res) => {
-  const { licenseKey, plan = "trial", variant = "Trial" } = req.body;
-  if (!licenseKey) return res.status(400).json({ success: false });
+// app.post("/increment", async (req, res) => {
+//   const { licenseKey, plan = "trial", variant = "Trial" } = req.body;
+//   if (!licenseKey) return res.status(400).json({ success: false });
 
-  await DraftUsage.create({ licenseKey, plan, variant });
-  res.json({ success: true });
+//   await DraftUsage.create({ licenseKey, plan, variant });
+//   res.json({ success: true });
 
-  await QuotaLog.create({
-  licenseKey,
-  plan: licenseInfo.plan || "trial",
-  usedCount: newUsageCount
-});
+//   await QuotaLog.create({
+//   licenseKey,
+//   plan: licenseInfo.plan || "trial",
+//   usedCount: newUsageCount
+// });
 
-});
+//});
 
 // Track Events
 // POST /track-event
