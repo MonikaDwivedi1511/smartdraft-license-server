@@ -263,5 +263,19 @@ app.post("/track-event", async (req, res) => {
   }
 });
 
+app.post("/sync-drafts", async (req, res) => {
+  const { licenseKey, plan = "trial", variant = "Trial", used } = req.body;
+  if (!licenseKey || used == null) return res.status(400).json({ success: false });
+
+  try {
+    await DraftUsage.create({ licenseKey, plan, variant, usedCount: used });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("❌ Sync failed:", err);
+    return res.status(500).json({ success: false });
+  }
+});
+
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
