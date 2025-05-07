@@ -69,6 +69,23 @@ async function tryActivateLicense(licenseKey) {
   return null;
 }
 
+async function getVariantNameByOrderItemId(orderItemId) {
+  try {
+    const res = await fetch(`https://api.lemonsqueezy.com/v1/order-items/${orderItemId}`, {
+      headers: {
+        Authorization: `Bearer ${LEMON_API_KEY}`,
+        Accept: "application/vnd.api+json"
+      }
+    });
+
+    const data = await res.json();
+    return data?.data?.attributes?.variant_name || "Unknown";
+  } catch (err) {
+    console.error("❌ Error fetching variant name from Lemon:", err);
+    return "Unknown";
+  }
+}
+
 function getPlanDetailsByVariant(variant) {
   const now = new Date();
   switch (variant) {
@@ -213,8 +230,11 @@ app.post("/lemon-webhook", async (req, res) => {
     // ✅ Only process license_key_created
     if (event.meta?.event_name === "license_key_created") {
       const licenseKey = event.data?.attributes?.key;
-      const variant = event.data?.attributes?.license_item?.name;
-      const orderId = event.data?.relationships?.order?.data?.id;
+      const orderId = event.data?.attributes?.order_id;
+      const orderItemId = event.data?.attributes?.order_item_id;
+
+      // 🔁 Dynamically fetch the variant name
+      const variant = await getVariantNameByOrderItemId(orderItemId);
 
       console.log("🔑 licenseKey:", licenseKey);
       console.log("🧾 variant:", variant);
