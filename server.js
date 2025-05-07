@@ -57,13 +57,21 @@ async function activateLicenseKey(licenseKey) {
       })
     });
 
-    const data = await res.json();
-    return data?.data?.attributes?.status === "active";
+    const body = await res.json();
+
+    if (!res.ok) {
+      console.error("❌ Activation failed — HTTP", res.status);
+      console.error("🧾 Response:", JSON.stringify(body, null, 2));
+      return false;
+    }
+
+    return body?.data?.attributes?.status === "active";
   } catch (err) {
-    console.error("❌ License activation API error:", err.message);
+    console.error("❌ License activation API error:", err.stack || err);
     return false;
   }
 }
+
 
 async function tryActivateLicense(licenseKey) {
   try {
