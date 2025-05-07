@@ -296,6 +296,9 @@ app.post("/track-event", async (req, res) => {
 //Auto activation on license key purchase
 app.post("/lemon-webhook", async (req, res) => {
   try {
+    const event = JSON.parse(payload);
+    const meta = event.meta || {};
+
     const clientId = meta.customer_email || meta.customer_name || "unknown_client";
     const secret = process.env.LEMON_WEBHOOK_SECRET;
     const receivedSig = req.headers["x-signature"];
