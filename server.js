@@ -296,6 +296,7 @@ app.post("/track-event", async (req, res) => {
 //Auto activation on license key purchase
 app.post("/lemon-webhook", async (req, res) => {
   try {
+    const clientId = meta.customer_email || meta.customer_name || "unknown_client";
     const secret = process.env.LEMON_WEBHOOK_SECRET;
     const receivedSig = req.headers["x-signature"];
     const payload = req.rawBody;
@@ -431,6 +432,29 @@ app.post("/find-license", async (req, res) => {
   return res.json({ licenseKey: license.licenseKey });
 });
 
+app.post("/poll-license", async (req, res) => {
+  const { clientId } = req.body;
+  if (!clientId) return res.status(400).json({ error: "Missing clientId" });
+
+  const license = await LicenseActivation.findOne({ clientId });
+  if (!license) return res.json({ allowed: false });
+
+  const usage = await DraftUsage.aggregate([
+    { $match: { licenseKey: license.licenseKey } },
+    { $group: { _id: null, total: { $sum: "$usedCount" } } }
+  ]);
+  const used = usage[0]?.total || 0;
+  const planDetails = getPlanDetailsByVariant(license.variant);
+
+  return res.json({
+    allowed: true,
+    licenseKey: license.licenseKey,
+    used,
+    limit: planDetails.limit,
+    expires_at: license.expiresAt,
+    variant: license.variant
+  });
+});
 
 
 const PORT = process.env.PORT || 3000;
