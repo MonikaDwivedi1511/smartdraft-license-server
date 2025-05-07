@@ -195,6 +195,7 @@ app.post("/quota-check", async (req, res) => {
           variant: lemonData.variant,
           orderId: lemonData.orderId,
           expiresAt: lemonData.expiresAt,
+          clientId,
           status: "active",
           activatedAt: new Date()
         },
@@ -332,6 +333,7 @@ app.post("/lemon-webhook", async (req, res) => {
             variant,
             orderId,
             expiresAt,
+            clientId,
             activatedAt: new Date(),
             status: "pending" // temporary until activated
           },
@@ -396,6 +398,29 @@ app.post("/lemon-webhook", async (req, res) => {
     return res.status(500).send("Webhook handler error");
   }
 });
+
+app.post("/check-latest-license", async (req, res) => {
+  const { clientId } = req.body;
+  if (!clientId) return res.status(400).json({ found: false, reason: "missing_client" });
+
+  try {
+    const match = await LicenseActivation.findOne({ clientId, status: "active" }).sort({ activatedAt: -1 });
+
+    if (!match) return res.json({ found: false });
+
+    res.json({
+      found: true,
+      licenseKey: match.licenseKey,
+      status: match.status,
+      expiresAt: match.expiresAt,
+      variant: match.variant
+    });
+  } catch (err) {
+    console.error("❌ Error in /check-latest-license:", err);
+    res.status(500).json({ found: false });
+  }
+});
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
