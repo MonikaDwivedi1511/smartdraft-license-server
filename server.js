@@ -13,6 +13,16 @@ require("dotenv").config();
 
 const app = express();
 app.use(cors());
+
+// Capture raw body for webhook verification
+const rawBodySaver = (req, res, buf) => {
+  if (req.url === "/lemon-webhook") {
+    req.rawBody = buf.toString("utf8");
+  }
+};
+
+app.use(bodyParser.json({ verify: rawBodySaver }));
+
 app.use(bodyParser.json());
 
 const trackEventRoute = require("./routes/trackEvent");
@@ -189,7 +199,7 @@ app.post("/lemon-webhook", async (req, res) => {
     const secret = process.env.LEMON_WEBHOOK_SECRET;
     const receivedSig = req.headers["x-signature"];
 
-    const payload = JSON.stringify(req.body);
+    const payload = req.rawBody;
     const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
 
     if (receivedSig !== expectedSig) {
