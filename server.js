@@ -421,6 +421,17 @@ app.post("/check-latest-license", async (req, res) => {
   }
 });
 
+app.post("/find-license", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Missing email" });
+
+  const license = await LicenseActivation.findOne({ customerEmail: email }).sort({ activatedAt: -1 });
+  if (!license) return res.json({ licenseKey: null });
+
+  return res.json({ licenseKey: license.licenseKey });
+});
+
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
