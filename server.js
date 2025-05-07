@@ -101,6 +101,34 @@ async function tryActivateLicense(licenseKey) {
   return null;
 }
 
+async function getLicenseDataFromLemon(licenseKey) {
+  try {
+    const res = await fetch("https://api.lemonsqueezy.com/v1/licenses/validate", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${LEMON_API_KEY}`
+      },
+      body: JSON.stringify({ license_key: licenseKey })
+    });
+
+    const body = await res.json();
+
+    if (body.valid !== true) return null;
+
+    return {
+      licenseKey: licenseKey,
+      orderId: body.meta?.order_id,
+      variant: body.meta?.variant_name,
+      expiresAt: body.license_key?.expires_at
+    };
+  } catch (err) {
+    console.error("❌ Lemon validation error:", err.message);
+    return null;
+  }
+}
+
 async function getVariantNameByOrderItemId(orderItemId) {
   try {
     const res = await fetch(`https://api.lemonsqueezy.com/v1/order-items/${orderItemId}`, {
@@ -152,19 +180,39 @@ app.post("/quota-check", async (req, res) => {
   }
 
   try {
-    const license = await LicenseActivation.findOne({ licenseKey });
+    let license = await LicenseActivation.findOne({ licenseKey });
 
-    if (!license || license.status !== "active") {
+    // 🔁 If not found in DB, try Lemon validation API
+    if (!license) {
+      const lemonData = await getLicenseDataFromLemon(licenseKey);
+      if (!lemonData) return res.json({ allowed: false, reason: "invalid" });
+
+      // 💾 Store validated license to DB for next time
+      license = await LicenseActivation.findOneAndUpdate(
+        { licenseKey },
+        {
+          licenseKey: lemonData.licenseKey,
+          variant: lemonData.variant,
+          orderId: lemonData.orderId,
+          expiresAt: lemonData.expiresAt,
+          status: "active",
+          activatedAt: new Date()
+        },
+        { upsert: true, new: true }
+      );
+
+      console.log(`✅ Synced license from Lemon API → ${licenseKey}`);
+    }
+
+    if (license.status !== "active") {
       return res.json({ allowed: false, reason: "invalid" });
     }
 
-    // ⏳ Expiry check
     const isExpired = license.expiresAt && new Date(license.expiresAt) < new Date();
     if (isExpired) {
       return res.json({ allowed: false, reason: "expired" });
     }
 
-    // 📊 Usage tracking
     const usage = await DraftUsage.aggregate([
       { $match: { licenseKey } },
       { $group: { _id: null, total: { $sum: "$usedCount" } } }
@@ -187,6 +235,7 @@ app.post("/quota-check", async (req, res) => {
     return res.status(500).json({ allowed: false, reason: "server_error" });
   }
 });
+
 
 // Endpoint: Sync Draft Count
 app.post("/sync-drafts", async (req, res) => {
