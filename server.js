@@ -204,9 +204,10 @@ app.post("/quota-check", async (req, res) => {
       console.log(`✅ Synced license from Lemon API → ${licenseKey}`);
     }
 
-    if (license.status !== "active") {
+    if (license.status && license.status !== "active") {
       return res.json({ allowed: false, reason: "invalid" });
     }
+
 
     const isExpired = license.expiresAt && new Date(license.expiresAt) < new Date();
     if (isExpired) {
