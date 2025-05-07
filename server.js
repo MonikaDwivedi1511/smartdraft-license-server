@@ -157,18 +157,31 @@ app.post("/sync-drafts", async (req, res) => {
 // Endpoint: Track Event
 app.post("/track-event", async (req, res) => {
   try {
-    const { event, timestamp, ...rest } = req.body;
+    const {
+      event,              // e.g. 'draft_generated', 'upgrade_clicked'
+      licenseKey,         // Optional: helpful for tracking user
+      details = {},       // Optional: extra data like plan, input length
+      timestamp = Date.now()
+    } = req.body;
+
+    if (!event) {
+      return res.status(400).json({ success: false, error: "Missing event name" });
+    }
+
     await Event.create({
       event,
-      timestamp: new Date(timestamp),
-      ...rest,
+      licenseKey,
+      details,
+      timestamp: new Date(timestamp)
     });
+
     res.status(200).json({ success: true });
   } catch (err) {
-    console.error("❌ Event logging failed:", err.message);
+    console.error("❌ Event tracking error:", err);
     res.status(500).json({ success: false });
   }
 });
+
 
 //Auto activation on license key purchase
 app.post("/lemon-webhook", async (req, res) => {
