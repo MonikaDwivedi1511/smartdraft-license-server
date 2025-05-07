@@ -27,23 +27,6 @@ const db = mongoose.connection;
 db.once("open", () => console.log("✅ MongoDB connected"));
 db.on("error", console.error);
 
-// MongoDB Schemas
-// const DraftUsageSchema = new mongoose.Schema({
-//   licenseKey: String,
-//   plan: String, // trial or paid
-//   variant: String,
-//   timestamp: { type: Date, default: Date.now },
-// });
-
-// const EventSchema = new mongoose.Schema({
-//   event: String,
-//   licenseKey: String,
-//   details: Object,
-//   timestamp: { type: Date, default: Date.now },
-// });
-
-//const DraftUsage = mongoose.model("DraftUsage", DraftUsageSchema);
-//const TrackEvent = mongoose.model("TrackEvent", EventSchema);
 
 // LemonSqueezy License API setup
 const LEMON_API_KEY = process.env.LEMON_API_KEY;
@@ -88,26 +71,96 @@ app.post("/activate", async (req, res) => {
 });
 
 // Quota Check
+const LicenseActivation = require("./models/LicenseActivation");
+
+// 🧠 Map variant → limit and expiry
+function getPlanDetailsByVariant(variant) {
+  const now = new Date();
+  switch (variant) {
+    case "SmartDraft Premium (Monthly)":
+      return { limit: 1000, expiresAt: new Date(now.setDate(now.getDate() + 30)) };
+    case "SmartDraft Premium (Half Yearly)":
+      return { limit: 6000, expiresAt: new Date(now.setDate(now.getDate() + 180)) };
+    case "SmartDraft Premium (Yearly)":
+      return { limit: 12000, expiresAt: new Date(now.setDate(now.getDate() + 365)) };
+    default:
+      return { limit: 200, expiresAt: null }; // Free / Trial fallback
+  }
+}
+
 app.post("/quota-check", async (req, res) => {
   const { licenseKey } = req.body;
   if (!licenseKey) return res.status(400).json({ allowed: false, reason: "missing" });
 
-  const usage = await DraftUsage.countDocuments({ licenseKey });
-  const license = await getLicenseData(licenseKey);
-  if (!license) return res.json({ allowed: false, reason: "invalid" });
+  try {
+    let license = await getLicenseData(licenseKey);
 
-  const expired = license.expires_at && new Date(license.expires_at) < new Date();
-  if (expired) return res.json({ allowed: false, reason: "expired" });
+    // 🔄 Attempt activation if not already activated or no expiry
+    if (!license || !license.expires_at) {
+      console.log("🔄 Attempting activation...");
+      const activateRes = await fetch(`${BASE_URL}/license-keys/activate`, {
+        method: "POST",
+        headers: {
+          Accept: "application/vnd.api+json",
+          "Content-Type": "application/vnd.api+json",
+          Authorization: `Bearer ${LEMON_API_KEY}`,
+        },
+        body: JSON.stringify({ license_key: licenseKey, activation_name: "smartdraft" }),
+      });
 
-  res.json({
-    allowed: true,
-    limit: 1000,
-    expires_at: license.expires_at,
-    variant: license.variant,
-    order_id: license.order_id,
-    used: usage,
-  });
+      const activateData = await activateRes.json();
+      if (!activateData?.data) {
+        return res.json({ allowed: false, reason: "invalid" });
+      }
+
+      const attrs = activateData.data.attributes;
+      const planDetails = getPlanDetailsByVariant(attrs.variant_name);
+
+      license = {
+        order_id: attrs.order_id,
+        expires_at: attrs.expires_at || planDetails.expiresAt.toISOString(),
+        variant: attrs.variant_name,
+        limit: planDetails.limit
+      };
+
+      // 🧾 Store activation metadata in MongoDB
+      await LicenseActivation.findOneAndUpdate(
+        { licenseKey },
+        {
+          licenseKey,
+          variant: license.variant,
+          orderId: license.order_id,
+          expiresAt: new Date(license.expires_at),
+          activatedAt: new Date()
+        },
+        { upsert: true }
+      );
+    }
+
+    // ⛔ Check expiry
+    const isExpired = license.expires_at && new Date(license.expires_at) < new Date();
+    if (isExpired) {
+      return res.json({ allowed: false, reason: "expired" });
+    }
+
+    // 📊 Get usage
+    const usage = await DraftUsage.countDocuments({ licenseKey });
+
+    // ✅ Return final result
+    return res.json({
+      allowed: true,
+      used: usage,
+      limit: license.limit,
+      expires_at: license.expires_at,
+      variant: license.variant,
+      order_id: license.order_id,
+    });
+  } catch (err) {
+    console.error("❌ /quota-check error:", err);
+    return res.status(500).json({ allowed: false, reason: "server_error" });
+  }
 });
+
 
 // Increment Draft Usage
 // app.post("/increment", async (req, res) => {
