@@ -42,30 +42,31 @@ db.on("error", console.error);
 const LEMON_API_KEY = process.env.LEMON_API_KEY;
 const BASE_URL = "https://api.lemonsqueezy.com/v1";
 
-async function activateLicenseKey(licenseKey) {
+async function activateLicenseKey(licenseKey, instanceName = "smartdraft") {
   try {
-    const res = await fetch("https://api.lemonsqueezy.com/v1/license-key-activations", {
+    const res = await fetch("https://api.lemonsqueezy.com/v1/licenses/activate", {
       method: "POST",
       headers: {
-        Accept: "application/vnd.api+json",
-        "Content-Type": "application/vnd.api+json",
+        Accept: "application/json",
+        "Content-Type": "application/json",
         Authorization: `Bearer ${LEMON_API_KEY}`
       },
       body: JSON.stringify({
         license_key: licenseKey,
-        activation_name: "smartdraft"
+        instance_name: instanceName
       })
     });
 
     const body = await res.json();
 
-    if (!res.ok) {
+    if (!res.ok || body.activated !== true) {
       console.error("❌ Activation failed — HTTP", res.status);
       console.error("🧾 Response:", JSON.stringify(body, null, 2));
       return false;
     }
 
-    return body?.data?.attributes?.status === "active";
+    console.log(`🚀 License activated: ${licenseKey}`);
+    return true;
   } catch (err) {
     console.error("❌ License activation API error:", err.stack || err);
     return false;
