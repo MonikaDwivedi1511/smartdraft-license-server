@@ -310,7 +310,7 @@ app.post("/lemon-webhook", async (req, res) => {
       return res.status(403).send("Invalid signature");
     }
 
-    const event = JSON.parse(payload);
+    //const event = JSON.parse(payload);
     const eventName = event.meta?.event_name;
     console.log("📥 Incoming Lemon event:", eventName);
 
