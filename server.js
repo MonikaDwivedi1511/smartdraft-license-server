@@ -198,21 +198,32 @@ app.post("/lemon-webhook", async (req, res) => {
   try {
     const secret = process.env.LEMON_WEBHOOK_SECRET;
     const receivedSig = req.headers["x-signature"];
-
     const payload = req.rawBody;
+
     const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
 
     if (receivedSig !== expectedSig) {
-      console.warn("🚫 Invalid webhook signature");
+      console.warn("❌ Invalid signature");
       return res.status(403).send("Invalid signature");
     }
 
-    const event = req.body;
+    const event = JSON.parse(payload); // 🟡 Important: parse rawBody, not req.body
+    console.log("📥 Valid Lemon event:", JSON.stringify(event, null, 2));
 
+    // ✅ Only process license_key_created
     if (event.meta?.event_name === "license_key_created") {
-      const licenseKey = event.data.attributes.key;
-      const variant = event.data.attributes.license_item.name;
-      const orderId = event.data.relationships.order.data.id;
+      const licenseKey = event.data?.attributes?.key;
+      const variant = event.data?.attributes?.license_item?.name;
+      const orderId = event.data?.relationships?.order?.data?.id;
+
+      console.log("🔑 licenseKey:", licenseKey);
+      console.log("🧾 variant:", variant);
+      console.log("📦 orderId:", orderId);
+
+      if (!licenseKey || !variant || !orderId) {
+        console.warn("⚠️ Missing licenseKey / variant / orderId in payload");
+        return res.status(400).send("Incomplete license event");
+      }
 
       const planDetails = getPlanDetailsByVariant(variant);
       const expiresAt = planDetails.expiresAt.toISOString();
@@ -225,20 +236,21 @@ app.post("/lemon-webhook", async (req, res) => {
           orderId,
           expiresAt,
           activatedAt: new Date(),
-          status: "active",
+          status: "active"
         },
         { upsert: true }
       );
 
-      console.log(`✅ Auto-activated license ${licenseKey} via webhook`);
+      console.log(`✅ License ${licenseKey} auto-activated via webhook`);
     }
 
-    return res.status(200).send("OK");
+    res.status(200).send("OK");
   } catch (err) {
-    console.error("❌ Webhook error:", err);
-    return res.status(500).send("Webhook handler error");
+    console.error("❌ Webhook error:", err.stack || err);
+    res.status(500).send("Webhook handler error");
   }
 });
+
 
 
 const PORT = process.env.PORT || 3000;
