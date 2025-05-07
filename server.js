@@ -299,23 +299,28 @@ app.post("/lemon-webhook", async (req, res) => {
           user_email,
           renews_at
         } = event.data?.attributes || {};
-
+      
         if (!order_id || !variant_name) {
           console.warn("⚠️ Missing order_id or variant_name in subscription event");
           return res.status(400).send("Incomplete subscription data");
         }
-
+      
+        // ⏳ Wait 3 seconds to let license_key_created run first
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      
+        const update = {
+          variant: variant_name,
+          userName: user_name,
+          userEmail: user_email,
+          expiresAt: new Date(renews_at),
+          status: "active"
+        };
+      
         const result = await LicenseActivation.findOneAndUpdate(
           { orderId: order_id },
-          {
-            variant: variant_name,
-            userName: user_name,
-            userEmail: user_email,
-            expiresAt: new Date(renews_at),
-            status: "active"
-          }
+          update
         );
-
+      
         if (result && result.licenseKey) {
           const activated = await activateLicenseKey(result.licenseKey);
           if (activated) {
@@ -324,9 +329,9 @@ app.post("/lemon-webhook", async (req, res) => {
             console.warn(`⚠️ Failed to activate license ${result.licenseKey} on Lemon`);
           }
         } else {
-          console.warn("⚠️ No license matched for order_id:", order_id);
+          console.warn("⚠️ Still no license matched after delay for order:", order_id);
         }
-
+      
         break;
       }
 
