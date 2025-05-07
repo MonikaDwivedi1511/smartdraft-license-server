@@ -42,6 +42,29 @@ db.on("error", console.error);
 const LEMON_API_KEY = process.env.LEMON_API_KEY;
 const BASE_URL = "https://api.lemonsqueezy.com/v1";
 
+async function activateLicenseKey(licenseKey) {
+  try {
+    const res = await fetch("https://api.lemonsqueezy.com/v1/license-keys/activate", {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json",
+        Authorization: `Bearer ${LEMON_API_KEY}`
+      },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        activation_name: "smartdraft"
+      })
+    });
+
+    const data = await res.json();
+    return data?.data?.attributes?.status === "active";
+  } catch (err) {
+    console.error("❌ License activation API error:", err.message);
+    return false;
+  }
+}
+
 async function tryActivateLicense(licenseKey) {
   try {
     const res = await fetch(`${BASE_URL}/license-keys/activate`, {
@@ -251,7 +274,7 @@ app.post("/lemon-webhook", async (req, res) => {
             orderId,
             expiresAt,
             activatedAt: new Date(),
-            status: "active"
+            status: "pending" // temporary until activated
           },
           { upsert: true }
         );
@@ -285,8 +308,13 @@ app.post("/lemon-webhook", async (req, res) => {
           }
         );
 
-        if (result) {
-          console.log(`✅ Subscription enrichment applied for license: ${result.licenseKey}`);
+        if (result && result.licenseKey) {
+          const activated = await activateLicenseKey(result.licenseKey);
+          if (activated) {
+            console.log(`🚀 License ${result.licenseKey} successfully activated via Lemon`);
+          } else {
+            console.warn(`⚠️ Failed to activate license ${result.licenseKey} on Lemon`);
+          }
         } else {
           console.warn("⚠️ No license matched for order_id:", order_id);
         }
@@ -304,8 +332,6 @@ app.post("/lemon-webhook", async (req, res) => {
     return res.status(500).send("Webhook handler error");
   }
 });
-
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
