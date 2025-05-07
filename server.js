@@ -44,7 +44,7 @@ const BASE_URL = "https://api.lemonsqueezy.com/v1";
 
 async function activateLicenseKey(licenseKey) {
   try {
-    const res = await fetch("https://api.lemonsqueezy.com/v1/license-keys/activate", {
+    const res = await fetch("https://api.lemonsqueezy.com/v1/license-key-activations", {
       method: "POST",
       headers: {
         Accept: "application/vnd.api+json",
