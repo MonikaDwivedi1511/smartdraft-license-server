@@ -2,6 +2,7 @@
 
 const express = require("express");
 const cors = require("cors");
+const crypto = require("crypto"); // For signature verification
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const QuotaLog = require("./models/QuotaLog");
@@ -86,41 +87,41 @@ app.post("/activate", async (req, res) => {
 // Endpoint: Check Quota
 app.post("/quota-check", async (req, res) => {
   const { licenseKey } = req.body;
-  if (!licenseKey) return res.status(400).json({ allowed: false, reason: "missing" });
+
+  if (!licenseKey) {
+    return res.status(400).json({ allowed: false, reason: "missing_key" });
+  }
 
   try {
-    let license = await tryActivateLicense(licenseKey);
+    const license = await LicenseActivation.findOne({ licenseKey });
 
-    if (!license) return res.json({ allowed: false, reason: "invalid" });
+    if (!license || license.status !== "active") {
+      return res.json({ allowed: false, reason: "invalid" });
+    }
 
-    const planDetails = getPlanDetailsByVariant(license.variant);
-    license.limit = planDetails.limit;
-    license.expires_at = license.expires_at || planDetails.expiresAt.toISOString();
-
-    await LicenseActivation.findOneAndUpdate(
-      { licenseKey },
-      {
-        licenseKey,
-        variant: license.variant,
-        orderId: license.order_id,
-        expiresAt: new Date(license.expires_at),
-        activatedAt: new Date(),
-      },
-      { upsert: true }
-    );
-
-    if (license.expires_at && new Date(license.expires_at) < new Date()) {
+    // ⏳ Expiry check
+    const isExpired = license.expiresAt && new Date(license.expiresAt) < new Date();
+    if (isExpired) {
       return res.json({ allowed: false, reason: "expired" });
     }
 
-    const usage = await DraftUsage.countDocuments({ licenseKey });
+    // 📊 Usage tracking
+    const usage = await DraftUsage.aggregate([
+      { $match: { licenseKey } },
+      { $group: { _id: null, total: { $sum: "$usedCount" } } }
+    ]);
+
+    const used = usage[0]?.total || 0;
+    const planDetails = getPlanDetailsByVariant(license.variant);
+    const limit = planDetails.limit;
+
     return res.json({
       allowed: true,
-      used: usage,
-      limit: license.limit,
-      expires_at: license.expires_at,
+      used,
+      limit,
+      expires_at: license.expiresAt,
       variant: license.variant,
-      order_id: license.order_id,
+      order_id: license.orderId
     });
   } catch (err) {
     console.error("❌ /quota-check error:", err);
@@ -131,16 +132,27 @@ app.post("/quota-check", async (req, res) => {
 // Endpoint: Sync Draft Count
 app.post("/sync-drafts", async (req, res) => {
   const { licenseKey, plan = "trial", variant = "Trial", used } = req.body;
-  if (!licenseKey || used == null) return res.status(400).json({ success: false });
+
+  if (!licenseKey || used == null) {
+    return res.status(400).json({ success: false, error: "Missing licenseKey or used count" });
+  }
 
   try {
-    await DraftUsage.create({ licenseKey, plan, variant, usedCount: used });
+    await DraftUsage.create({
+      licenseKey,
+      plan,
+      variant,
+      usedCount: used,
+      timestamp: new Date()
+    });
+
     return res.json({ success: true });
   } catch (err) {
-    console.error("❌ Sync failed:", err);
+    console.error("❌ /sync-drafts error:", err);
     return res.status(500).json({ success: false });
   }
 });
+
 
 // Endpoint: Track Event
 app.post("/track-event", async (req, res) => {
@@ -157,6 +169,54 @@ app.post("/track-event", async (req, res) => {
     res.status(500).json({ success: false });
   }
 });
+
+//Auto activation on license key purchase
+app.post("/lemon-webhook", async (req, res) => {
+  try {
+    const secret = process.env.LEMON_WEBHOOK_SECRET;
+    const receivedSig = req.headers["x-signature"];
+
+    const payload = JSON.stringify(req.body);
+    const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+
+    if (receivedSig !== expectedSig) {
+      console.warn("🚫 Invalid webhook signature");
+      return res.status(403).send("Invalid signature");
+    }
+
+    const event = req.body;
+
+    if (event.meta?.event_name === "license_key_created") {
+      const licenseKey = event.data.attributes.key;
+      const variant = event.data.attributes.license_item.name;
+      const orderId = event.data.relationships.order.data.id;
+
+      const planDetails = getPlanDetailsByVariant(variant);
+      const expiresAt = planDetails.expiresAt.toISOString();
+
+      await LicenseActivation.findOneAndUpdate(
+        { licenseKey },
+        {
+          licenseKey,
+          variant,
+          orderId,
+          expiresAt,
+          activatedAt: new Date(),
+          status: "active",
+        },
+        { upsert: true }
+      );
+
+      console.log(`✅ Auto-activated license ${licenseKey} via webhook`);
+    }
+
+    return res.status(200).send("OK");
+  } catch (err) {
+    console.error("❌ Webhook error:", err);
+    return res.status(500).send("Webhook handler error");
+  }
+});
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
