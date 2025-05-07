@@ -216,7 +216,6 @@ app.post("/lemon-webhook", async (req, res) => {
     const secret = process.env.LEMON_WEBHOOK_SECRET;
     const receivedSig = req.headers["x-signature"];
     const payload = req.rawBody;
-
     const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
 
     if (receivedSig !== expectedSig) {
@@ -224,50 +223,85 @@ app.post("/lemon-webhook", async (req, res) => {
       return res.status(403).send("Invalid signature");
     }
 
-    const event = JSON.parse(payload); // 🟡 Important: parse rawBody, not req.body
-    console.log("📥 Valid Lemon event:", JSON.stringify(event, null, 2));
+    const event = JSON.parse(payload);
+    const eventName = event.meta?.event_name;
+    console.log("📥 Incoming Lemon event:", eventName);
 
-    // ✅ Only process license_key_created
-    if (event.meta?.event_name === "license_key_created") {
-      const licenseKey = event.data?.attributes?.key;
-      const orderId = event.data?.attributes?.order_id;
-      const orderItemId = event.data?.attributes?.order_item_id;
+    switch (eventName) {
+      case "license_key_created": {
+        const licenseKey = event.data?.attributes?.key;
+        const orderId = event.data?.attributes?.order_id;
+        const orderItemId = event.data?.attributes?.order_item_id;
 
-      // 🔁 Dynamically fetch the variant name
-      const variant = await getVariantNameByOrderItemId(orderItemId);
+        const variant = await getVariantNameByOrderItemId(orderItemId);
 
-      console.log("🔑 licenseKey:", licenseKey);
-      console.log("🧾 variant:", variant);
-      console.log("📦 orderId:", orderId);
+        if (!licenseKey || !variant || !orderId) {
+          console.warn("⚠️ Missing licenseKey / variant / orderId in payload");
+          return res.status(400).send("Incomplete license event");
+        }
 
-      if (!licenseKey || !variant || !orderId) {
-        console.warn("⚠️ Missing licenseKey / variant / orderId in payload");
-        return res.status(400).send("Incomplete license event");
+        const planDetails = getPlanDetailsByVariant(variant);
+        const expiresAt = planDetails.expiresAt?.toISOString();
+
+        await LicenseActivation.findOneAndUpdate(
+          { licenseKey },
+          {
+            licenseKey,
+            variant,
+            orderId,
+            expiresAt,
+            activatedAt: new Date(),
+            status: "active"
+          },
+          { upsert: true }
+        );
+
+        console.log(`✅ License ${licenseKey} created + pending enrichment`);
+        break;
       }
 
-      const planDetails = getPlanDetailsByVariant(variant);
-      const expiresAt = planDetails.expiresAt.toISOString();
+      case "subscription_created": {
+        const {
+          order_id,
+          variant_name,
+          user_name,
+          user_email,
+          renews_at
+        } = event.data?.attributes || {};
 
-      await LicenseActivation.findOneAndUpdate(
-        { licenseKey },
-        {
-          licenseKey,
-          variant,
-          orderId,
-          expiresAt,
-          activatedAt: new Date(),
-          status: "active"
-        },
-        { upsert: true }
-      );
+        if (!order_id || !variant_name) {
+          console.warn("⚠️ Missing order_id or variant_name in subscription event");
+          return res.status(400).send("Incomplete subscription data");
+        }
 
-      console.log(`✅ License ${licenseKey} auto-activated via webhook`);
+        const result = await LicenseActivation.findOneAndUpdate(
+          { orderId: order_id },
+          {
+            variant: variant_name,
+            userName: user_name,
+            userEmail: user_email,
+            expiresAt: new Date(renews_at),
+            status: "active"
+          }
+        );
+
+        if (result) {
+          console.log(`✅ Subscription enrichment applied for license: ${result.licenseKey}`);
+        } else {
+          console.warn("⚠️ No license matched for order_id:", order_id);
+        }
+
+        break;
+      }
+
+      default:
+        console.log("ℹ️ No handler for event:", eventName);
     }
 
-    res.status(200).send("OK");
+    return res.status(200).send("OK");
   } catch (err) {
     console.error("❌ Webhook error:", err.stack || err);
-    res.status(500).send("Webhook handler error");
+    return res.status(500).send("Webhook handler error");
   }
 });
 
