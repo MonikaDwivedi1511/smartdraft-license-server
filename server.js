@@ -296,6 +296,7 @@ app.post("/track-event", async (req, res) => {
 //Auto activation on license key purchase
 app.post("/lemon-webhook", async (req, res) => {
   try {
+     const payload = req.rawBody;
     const event = JSON.parse(payload);
     const meta = event.meta || {};
 
