@@ -339,38 +339,40 @@ app.post("/lemon-webhook", async (req, res) => {
     console.log("📥 Incoming Lemon event:", eventName);
 
     switch (eventName) {
-      case "license_key_created": {
-        const licenseKey = event.data?.attributes?.key;
-        const orderId = event.data?.attributes?.order_id;
-        const orderItemId = event.data?.attributes?.order_item_id;
+      case "license_key_created": { 
+          const licenseKey = event.data?.attributes?.key;
+          const orderId = event.data?.attributes?.order_id;
+          const orderItemId = event.data?.attributes?.order_item_id;
+          const customData = event.data?.attributes?.custom_data || {};
+          const clientId = customData.client_id || "unknown_client";
+        
+          const variant = await getVariantNameByOrderItemId(orderItemId);
+          const planDetails = getPlanDetailsByVariant(variant);
+          const expiresAt = planDetails.expiresAt?.toISOString();
 
-        const variant = await getVariantNameByOrderItemId(orderItemId);
+          if (!licenseKey || !variant || !orderId) {
+            console.warn("⚠️ Missing licenseKey / variant / orderId in payload");
+            return res.status(400).send("Incomplete license event");
+          }
 
-        if (!licenseKey || !variant || !orderId) {
-          console.warn("⚠️ Missing licenseKey / variant / orderId in payload");
-          return res.status(400).send("Incomplete license event");
+          await LicenseActivation.findOneAndUpdate(
+            { licenseKey },
+            {
+              licenseKey,
+              orderId,
+              variant,
+              expiresAt,
+              clientId,
+              status: "pending",
+              activatedAt: new Date()
+            },
+            { upsert: true }
+          );
+        
+          console.log(`✅ License ${licenseKey} created + pending enrichment`);
+          break;
         }
 
-        const planDetails = getPlanDetailsByVariant(variant);
-        const expiresAt = planDetails.expiresAt?.toISOString();
-
-        await LicenseActivation.findOneAndUpdate(
-          { licenseKey },
-          {
-            licenseKey,
-            variant,
-            orderId,
-            expiresAt,
-            clientId,
-            activatedAt: new Date(),
-            status: "pending" // temporary until activated
-          },
-          { upsert: true }
-        );
-
-        console.log(`✅ License ${licenseKey} created + pending enrichment`);
-        break;
-      }
 
       case "subscription_created": {
         const {
@@ -388,7 +390,7 @@ app.post("/lemon-webhook", async (req, res) => {
       
         // ⏳ Wait 3 seconds to let license_key_created run first
         await new Promise(resolve => setTimeout(resolve, 3000));
-      
+        
         const update = {
           variant: variant_name,
           userName: user_name,
