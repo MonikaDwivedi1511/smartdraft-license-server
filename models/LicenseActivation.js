@@ -1,4 +1,3 @@
-// models/LicenseActivation.js
 const mongoose = require("mongoose");
 
 const LicenseActivationSchema = new mongoose.Schema({
@@ -6,7 +5,8 @@ const LicenseActivationSchema = new mongoose.Schema({
   variant: String,
   orderId: String,
   expiresAt: Date,
-  activatedAt: { type: Date, default: Date.now }
+  activatedAt: { type: Date, default: Date.now },
+  clientId: { type: String } // ✅ Add this line
 });
 
 module.exports = mongoose.model("LicenseActivation", LicenseActivationSchema);
