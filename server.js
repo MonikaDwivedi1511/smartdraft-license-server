@@ -310,9 +310,9 @@ app.post("/lemon-webhook", async (req, res) => {
     const eventName = meta?.event_name;
     console.log("Event:", event);
     const clientId = meta?.custom_data?.client_id ||
-  meta.customer_email ||
-  meta.customer_name ||
-  "unknown_client";
+      event.data?.attributes?.user_email ||
+      event.data?.attributes?.user_name ||
+      "unknown_client";
 
      //const payload = req.rawBody;
     //const event = JSON.parse(payload);
