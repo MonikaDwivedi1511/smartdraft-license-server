@@ -297,22 +297,36 @@ app.post("/track-event", async (req, res) => {
 app.post("/lemon-webhook", async (req, res) => {
   try {
      const payload = req.rawBody;
-    const event = JSON.parse(payload);
-    const meta = event.meta || {};
-
-    const clientId = meta.customer_email || meta.customer_name || "unknown_client";
     const secret = process.env.LEMON_WEBHOOK_SECRET;
     const receivedSig = req.headers["x-signature"];
-    //const payload = req.rawBody;
     const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
 
     if (receivedSig !== expectedSig) {
-      console.warn("❌ Invalid signature");
       return res.status(403).send("Invalid signature");
     }
 
+    const event = JSON.parse(payload);
+    const meta = event.meta || {}; // ✅ add this
+    const eventName = meta?.event_name;
+    const clientId = meta?.custom_data?.client_id || meta.customer_email || meta.customer_name || "unknown_client";
+
+     //const payload = req.rawBody;
     //const event = JSON.parse(payload);
-    const eventName = event.meta?.event_name;
+    //const meta = event.meta || {};
+
+    //const clientId = meta.customer_email || meta.customer_name || "unknown_client";
+    //const secret = process.env.LEMON_WEBHOOK_SECRET;
+    //const receivedSig = req.headers["x-signature"];
+    //const payload = req.rawBody;
+    //const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+
+    // if (receivedSig !== expectedSig) {
+    //   console.warn("❌ Invalid signature");
+    //   return res.status(403).send("Invalid signature");
+    // }
+
+    //const event = JSON.parse(payload);
+    //const eventName = event.meta?.event_name;
     console.log("📥 Incoming Lemon event:", eventName);
 
     switch (eventName) {
@@ -441,7 +455,10 @@ app.post("/poll-license", async (req, res) => {
   if (!clientId) return res.status(400).json({ error: "Missing clientId" });
 
   const license = await LicenseActivation.findOne({ clientId });
-  if (!license) return res.json({ allowed: false });
+  if (!license) {
+  console.warn("❌ No license found for clientId:", clientId);
+  return res.json({ allowed: false });
+}
 
   const usage = await DraftUsage.aggregate([
     { $match: { licenseKey: license.licenseKey } },
