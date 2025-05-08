@@ -308,6 +308,7 @@ app.post("/lemon-webhook", async (req, res) => {
     const event = JSON.parse(payload);
     const meta = event.meta || {}; // ✅ add this
     const eventName = meta?.event_name;
+    console.log("Event:", event);
     const clientId =
   event?.data?.attributes?.custom_data?.client_id ||
   meta.customer_email ||
