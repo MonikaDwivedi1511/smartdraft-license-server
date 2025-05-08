@@ -303,7 +303,7 @@ app.post("/lemon-webhook", async (req, res) => {
     const clientId = meta.customer_email || meta.customer_name || "unknown_client";
     const secret = process.env.LEMON_WEBHOOK_SECRET;
     const receivedSig = req.headers["x-signature"];
-    const payload = req.rawBody;
+    //const payload = req.rawBody;
     const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
 
     if (receivedSig !== expectedSig) {
