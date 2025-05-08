@@ -308,7 +308,11 @@ app.post("/lemon-webhook", async (req, res) => {
     const event = JSON.parse(payload);
     const meta = event.meta || {}; // ✅ add this
     const eventName = meta?.event_name;
-    const clientId = meta?.custom_data?.client_id || meta.customer_email || meta.customer_name || "unknown_client";
+    const clientId =
+  event?.data?.attributes?.custom_data?.client_id ||
+  meta.customer_email ||
+  meta.customer_name ||
+  "unknown_client";
 
      //const payload = req.rawBody;
     //const event = JSON.parse(payload);
