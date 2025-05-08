@@ -12,7 +12,12 @@ const LicenseActivation = require("./models/LicenseActivation");
 require("dotenv").config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: "*", // Or specify exact origins like "https://mail.google.com"
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
+
 
 // Capture raw body for webhook verification
 const rawBodySaver = (req, res, buf) => {
