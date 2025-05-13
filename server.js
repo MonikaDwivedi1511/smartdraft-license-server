@@ -467,7 +467,7 @@ app.post("/poll-license", async (req, res) => {
   const { clientId } = req.body;
   if (!clientId) return res.status(400).json({ error: "Missing clientId" });
 
-  const license = await LicenseActivation.findOne({ clientId });
+  const license = await LicenseActivation.findOne({ clientId }).sort({ activatedAt: -1 });
   console.log("License details from server - find variant", license);
   if (!license) {
   console.warn("❌ No license found for clientId:", clientId);
