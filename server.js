@@ -179,6 +179,7 @@ app.post("/activate", async (req, res) => {
 // Endpoint: Check Quota
 app.post("/quota-check", async (req, res) => {
   const { licenseKey } = req.body;
+  res.setHeader("Access-Control-Allow-Origin", "*");
 
   if (!licenseKey) {
     return res.status(400).json({ allowed: false, reason: "missing_key" });
