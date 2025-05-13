@@ -396,7 +396,8 @@ app.post("/lemon-webhook", async (req, res) => {
           userName: user_name,
           userEmail: user_email,
           expiresAt: new Date(renews_at),
-          status: "active"
+          status: "active",
+          clientId
         };
       
         const result = await LicenseActivation.findOneAndUpdate(
