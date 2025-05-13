@@ -460,7 +460,7 @@ app.post("/check-latest-license", async (req, res) => {
   if (!clientId) return res.status(400).json({ found: false, reason: "missing_client" });
 
   try {
-    const match = await LicenseActivation.findOne({ clientId, status: "active" }).sort({ activatedAt: -1 });
+    const match = await LicenseActivation.findOne({ clientId, status: "active" }).sort({ createdAt: -1 });
 
     if (!match) return res.json({ found: false });
 
@@ -481,7 +481,7 @@ app.post("/find-license", async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: "Missing email" });
 
-  const license = await LicenseActivation.findOne({ customerEmail: email }).sort({ activatedAt: -1 });
+  const license = await LicenseActivation.findOne({ customerEmail: email }).sort({ createdAt: -1 });
   if (!license) return res.json({ licenseKey: null });
 
   return res.json({ licenseKey: license.licenseKey });
@@ -491,7 +491,7 @@ app.post("/poll-license", async (req, res) => {
   const { clientId } = req.body;
   if (!clientId) return res.status(400).json({ error: "Missing clientId" });
 
-  const license = await LicenseActivation.findOne({ clientId }).sort({ activatedAt: -1 });
+  const license = await LicenseActivation.findOne({ clientId }).sort({ createdAt: -1 });
   console.log("License details from server - find variant", license);
   if (!license) {
   console.warn("❌ No license found for clientId:", clientId);
