@@ -178,7 +178,7 @@ app.post("/activate", async (req, res) => {
 
 // Endpoint: Check Quota
 app.post("/quota-check", async (req, res) => {
-  const { licenseKey } = req.body;
+  const { licenseKey, clientId } = req.body;
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   if (!licenseKey) {
@@ -381,6 +381,11 @@ app.post("/lemon-webhook", async (req, res) => {
         // ⏳ Wait 3 seconds to let license_key_created run first
         await new Promise(resolve => setTimeout(resolve, 3000));
         
+        await LicenseActivation.updateMany(
+          { clientId, status: "active" },
+          { $set: { status: "expired" } }
+        );
+        
         const update = {
           variant: variant_name,
           userName: user_name,
@@ -390,12 +395,6 @@ app.post("/lemon-webhook", async (req, res) => {
           clientId
         };
 
-        await LicenseActivation.updateMany(
-          { clientId, status: "active" },
-          { $set: { status: "expired" } }
-        );
-
-      
         const result = await LicenseActivation.findOneAndUpdate(
           { orderId: order_id },
           update
