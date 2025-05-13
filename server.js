@@ -319,24 +319,7 @@ app.post("/lemon-webhook", async (req, res) => {
       event.data?.attributes?.user_email ||
       event.data?.attributes?.user_name ||
       "unknown_client";
-
-     //const payload = req.rawBody;
-    //const event = JSON.parse(payload);
-    //const meta = event.meta || {};
-
-    //const clientId = meta.customer_email || meta.customer_name || "unknown_client";
-    //const secret = process.env.LEMON_WEBHOOK_SECRET;
-    //const receivedSig = req.headers["x-signature"];
-    //const payload = req.rawBody;
-    //const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
-
-    // if (receivedSig !== expectedSig) {
-    //   console.warn("❌ Invalid signature");
-    //   return res.status(403).send("Invalid signature");
-    // }
-
-    //const event = JSON.parse(payload);
-    //const eventName = event.meta?.event_name;
+    
     console.log("📥 Incoming Lemon event:", eventName);
 
     switch (eventName) {
@@ -355,6 +338,12 @@ app.post("/lemon-webhook", async (req, res) => {
             console.warn("⚠️ Missing licenseKey / variant / orderId in payload");
             return res.status(400).send("Incomplete license event");
           }
+
+        // ❌ Deactivate all other licenses for the same clientId
+          await LicenseActivation.updateMany(
+            { clientId, status: "active" },
+            { $set: { status: "expired" } }
+          );
 
           await LicenseActivation.findOneAndUpdate(
             { licenseKey },
@@ -400,6 +389,12 @@ app.post("/lemon-webhook", async (req, res) => {
           status: "active",
           clientId
         };
+
+        await LicenseActivation.updateMany(
+          { clientId, status: "active" },
+          { $set: { status: "expired" } }
+        );
+
       
         const result = await LicenseActivation.findOneAndUpdate(
           { orderId: order_id },
