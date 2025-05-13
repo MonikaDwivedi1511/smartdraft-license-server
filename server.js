@@ -222,6 +222,7 @@ app.post("/quota-check", async (req, res) => {
     }
 
     const COOLDOWN_HOURS = 24;
+    let deviceSwitched = false;
     if (license.clientId && license.clientId !== clientId) {
       const now = new Date();
     
@@ -244,7 +245,8 @@ app.post("/quota-check", async (req, res) => {
       license.lastClientIdSwitchAt = now;
       license.switchCount = (license.switchCount || 0) + 1;
       await license.save();
-    
+
+      deviceSwitched = true;
       console.log(`🔁 Device switched to ${clientId} at ${now}`);
     }
 
@@ -263,7 +265,8 @@ app.post("/quota-check", async (req, res) => {
       limit,
       expires_at: license.expiresAt,
       variant: license.variant,
-      order_id: license.orderId
+      order_id: license.orderId,
+      deviceSwitched
     });
   } catch (err) {
     console.error("❌ /quota-check error:", err);
