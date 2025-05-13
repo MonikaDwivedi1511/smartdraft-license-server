@@ -221,6 +221,11 @@ app.post("/quota-check", async (req, res) => {
       return res.json({ allowed: false, reason: "expired" });
     }
 
+    if (license.clientId && license.clientId !== clientId) {
+        console.log(`🔁 Device switch: replacing old clientId ${license.clientId} with ${clientId}`);
+        license.clientId = clientId;
+        await license.save();
+      }
     const usage = await DraftUsage.aggregate([
       { $match: { licenseKey } },
       { $group: { _id: null, total: { $sum: "$usedCount" } } }
