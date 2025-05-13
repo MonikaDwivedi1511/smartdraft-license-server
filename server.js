@@ -221,11 +221,33 @@ app.post("/quota-check", async (req, res) => {
       return res.json({ allowed: false, reason: "expired" });
     }
 
+    const COOLDOWN_HOURS = 24;
     if (license.clientId && license.clientId !== clientId) {
-        console.log(`🔁 Device switch: replacing old clientId ${license.clientId} with ${clientId}`);
-        license.clientId = clientId;
-        await license.save();
+      const now = new Date();
+    
+      // ⏱️ Check cooldown
+      if (
+        license.lastClientIdSwitchAt &&
+        (now - new Date(license.lastClientIdSwitchAt)) / (1000 * 60 * 60) < COOLDOWN_HOURS
+      ) {
+        return res.status(403).json({
+          allowed: false,
+          reason: "device_switch_cooldown",
+          message: `You can switch devices only once every ${COOLDOWN_HOURS} hours.`
+        });
       }
+
+      console.log(`🔁 Device switch: replacing old clientId ${license.clientId} with ${clientId}`);
+        
+      // ✅ Allow device switch
+      license.clientId = clientId;
+      license.lastClientIdSwitchAt = now;
+      license.switchCount = (license.switchCount || 0) + 1;
+      await license.save();
+    
+      console.log(`🔁 Device switched to ${clientId} at ${now}`);
+    }
+
     const usage = await DraftUsage.aggregate([
       { $match: { licenseKey } },
       { $group: { _id: null, total: { $sum: "$usedCount" } } }
