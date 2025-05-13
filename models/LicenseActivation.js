@@ -6,7 +6,7 @@ const LicenseActivationSchema = new mongoose.Schema({
   orderId: String,
   expiresAt: Date,
   activatedAt: { type: Date, default: Date.now },
-  clientId: { type: String } // ✅ Add this line
+  clientId: { type: String, required: false} // ✅ Add this line
 });
 
 module.exports = mongoose.model("LicenseActivation", LicenseActivationSchema);
