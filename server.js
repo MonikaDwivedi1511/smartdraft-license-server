@@ -5,7 +5,7 @@ const cors = require("cors");
 const crypto = require("crypto"); // For signature verification
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const QuotaLog = require("./models/QuotaLog");
+//const QuotaLog = require("./models/QuotaLog");
 const DraftUsage = require("./models/DraftUsage");
 const Event = require("./models/Event");
 const LicenseActivation = require("./models/LicenseActivation");
@@ -28,7 +28,7 @@ const rawBodySaver = (req, res, buf) => {
 
 app.use(bodyParser.json({ verify: rawBodySaver }));
 
-app.use(bodyParser.json());
+//app.use(bodyParser.json());
 
 const trackEventRoute = require("./routes/trackEvent");
 app.use("/", trackEventRoute);
@@ -45,7 +45,7 @@ db.on("error", console.error);
 
 // LemonSqueezy License API
 const LEMON_API_KEY = process.env.LEMON_API_KEY;
-const BASE_URL = "https://api.lemonsqueezy.com/v1";
+//const BASE_URL = "https://api.lemonsqueezy.com/v1";
 
 async function activateLicenseKey(licenseKey, instanceName = "smartdraft") {
   try {
@@ -78,33 +78,32 @@ async function activateLicenseKey(licenseKey, instanceName = "smartdraft") {
   }
 }
 
+// async function tryActivateLicense(licenseKey) {
+//   try {
+//     const res = await fetch(`${BASE_URL}/license-keys/activate`, {
+//       method: "POST",
+//       headers: {
+//         Accept: "application/vnd.api+json",
+//         "Content-Type": "application/vnd.api+json",
+//         Authorization: `Bearer ${LEMON_API_KEY}`,
+//       },
+//       body: JSON.stringify({ license_key: licenseKey, activation_name: "smartdraft" }),
+//     });
 
-async function tryActivateLicense(licenseKey) {
-  try {
-    const res = await fetch(`${BASE_URL}/license-keys/activate`, {
-      method: "POST",
-      headers: {
-        Accept: "application/vnd.api+json",
-        "Content-Type": "application/vnd.api+json",
-        Authorization: `Bearer ${LEMON_API_KEY}`,
-      },
-      body: JSON.stringify({ license_key: licenseKey, activation_name: "smartdraft" }),
-    });
-
-    const data = await res.json();
-    if (data?.data?.attributes) {
-      const attrs = data.data.attributes;
-      return {
-        order_id: attrs.order_id,
-        expires_at: attrs.expires_at,
-        variant: attrs.variant_name,
-      };
-    }
-  } catch (err) {
-    console.error("❌ Activation failed:", err.message);
-  }
-  return null;
-}
+//     const data = await res.json();
+//     if (data?.data?.attributes) {
+//       const attrs = data.data.attributes;
+//       return {
+//         order_id: attrs.order_id,
+//         expires_at: attrs.expires_at,
+//         variant: attrs.variant_name,
+//       };
+//     }
+//   } catch (err) {
+//     console.error("❌ Activation failed:", err.message);
+//   }
+//   return null;
+// }
 
 async function getLicenseDataFromLemon(licenseKey) {
   try {
@@ -165,16 +164,16 @@ function getPlanDetailsByVariant(variant) {
   }
 }
 
-// Endpoint: Activate License
-app.post("/activate", async (req, res) => {
-  const { licenseKey } = req.body;
-  if (!licenseKey) return res.status(400).json({ success: false, error: "Missing key" });
+// // Endpoint: Activate License
+// app.post("/activate", async (req, res) => {
+//   const { licenseKey } = req.body;
+//   if (!licenseKey) return res.status(400).json({ success: false, error: "Missing key" });
 
-  const license = await tryActivateLicense(licenseKey);
-  if (!license) return res.json({ success: false });
+//   const license = await tryActivateLicense(licenseKey);
+//   if (!license) return res.json({ success: false });
 
-  res.json({ success: true, ...license });
-});
+//   res.json({ success: true, ...license });
+// });
 
 // Endpoint: Check Quota
 app.post("/quota-check", async (req, res) => {
@@ -358,7 +357,7 @@ app.post("/lemon-webhook", async (req, res) => {
           const orderId = event.data?.attributes?.order_id;
           const orderItemId = event.data?.attributes?.order_item_id;
           const customData = event.data?.attributes?.custom_data || {};
-          const clientId = customData.client_id || "unknown_client";
+          //const clientId = customData.client_id || "unknown_client";
         
           const variant = await getVariantNameByOrderItemId(orderItemId);
           const planDetails = getPlanDetailsByVariant(variant);
@@ -371,9 +370,10 @@ app.post("/lemon-webhook", async (req, res) => {
 
         // ❌ Deactivate all other licenses for the same clientId
           await LicenseActivation.updateMany(
-            { clientId, status: "active" },
+            { clientId, status: "active", orderId: { $ne: orderId } },
             { $set: { status: "expired" } }
           );
+          
 
           await LicenseActivation.findOneAndUpdate(
             { licenseKey },
@@ -412,9 +412,10 @@ app.post("/lemon-webhook", async (req, res) => {
         await new Promise(resolve => setTimeout(resolve, 3000));
         
         await LicenseActivation.updateMany(
-          { clientId, status: "active" },
+          { clientId, status: "active", orderId: { $ne: orderId } },
           { $set: { status: "expired" } }
         );
+        
         
         const update = {
           variant: variant_name,
@@ -455,37 +456,37 @@ app.post("/lemon-webhook", async (req, res) => {
   }
 });
 
-app.post("/check-latest-license", async (req, res) => {
-  const { clientId } = req.body;
-  if (!clientId) return res.status(400).json({ found: false, reason: "missing_client" });
+// app.post("/check-latest-license", async (req, res) => {
+//   const { clientId } = req.body;
+//   if (!clientId) return res.status(400).json({ found: false, reason: "missing_client" });
 
-  try {
-    const match = await LicenseActivation.findOne({ clientId, status: "active" }).sort({ createdAt: -1 });
+//   try {
+//     const match = await LicenseActivation.findOne({ clientId, status: "active" }).sort({ createdAt: -1 });
 
-    if (!match) return res.json({ found: false });
+//     if (!match) return res.json({ found: false });
 
-    res.json({
-      found: true,
-      licenseKey: match.licenseKey,
-      status: match.status,
-      expiresAt: match.expiresAt,
-      variant: match.variant
-    });
-  } catch (err) {
-    console.error("❌ Error in /check-latest-license:", err);
-    res.status(500).json({ found: false });
-  }
-});
+//     res.json({
+//       found: true,
+//       licenseKey: match.licenseKey,
+//       status: match.status,
+//       expiresAt: match.expiresAt,
+//       variant: match.variant
+//     });
+//   } catch (err) {
+//     console.error("❌ Error in /check-latest-license:", err);
+//     res.status(500).json({ found: false });
+//   }
+// });
 
-app.post("/find-license", async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: "Missing email" });
+// app.post("/find-license", async (req, res) => {
+//   const { email } = req.body;
+//   if (!email) return res.status(400).json({ error: "Missing email" });
 
-  const license = await LicenseActivation.findOne({ customerEmail: email }).sort({ createdAt: -1 });
-  if (!license) return res.json({ licenseKey: null });
+//   const license = await LicenseActivation.findOne({ customerEmail: email }).sort({ createdAt: -1 });
+//   if (!license) return res.json({ licenseKey: null });
 
-  return res.json({ licenseKey: license.licenseKey });
-});
+//   return res.json({ licenseKey: license.licenseKey });
+// });
 
 app.post("/poll-license", async (req, res) => {
   const { clientId } = req.body;
