@@ -360,6 +360,8 @@ app.post("/lemon-webhook", async (req, res) => {
           const orderId = event.data?.attributes?.order_id;
           const orderItemId = event.data?.attributes?.order_item_id;
           const customData = event.data?.attributes?.custom_data || {};
+          const lemonCreatedAt = event.data?.attributes?.created_at || new Date().toISOString();
+
           //const clientId = customData.client_id || "unknown_client";
         
           const variant = await getVariantNameByOrderItemId(orderItemId);
@@ -387,7 +389,8 @@ app.post("/lemon-webhook", async (req, res) => {
               expiresAt,
               clientId,
               status: "pending",
-              activatedAt: new Date()
+              activatedAt: new Date(),
+              createdAt: new Date(lemonCreatedAt)
             },
             { upsert: true }
           );
