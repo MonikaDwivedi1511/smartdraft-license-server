@@ -334,7 +334,7 @@ app.post("/track-event", async (req, res) => {
 //Auto activation on license key purchase
 app.post("/lemon-webhook", async (req, res) => {
   try {
-     const payload = req.rawBody;
+    const payload = req.rawBody;
     const secret = process.env.LEMON_WEBHOOK_SECRET;
     const receivedSig = req.headers["x-signature"];
     const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
@@ -347,10 +347,12 @@ app.post("/lemon-webhook", async (req, res) => {
     const meta = event.meta || {}; // ✅ add this
     const eventName = meta?.event_name;
     console.log("Event:", event);
-    const clientId = meta?.custom_data?.client_id ||
-      event.data?.attributes?.user_email ||
-      event.data?.attributes?.user_name ||
-      "unknown_client";
+    // const clientId = meta?.custom_data?.client_id ||
+    //   event.data?.attributes?.user_email ||
+    //   event.data?.attributes?.user_name ||
+    //   "unknown_client";
+    const clientId = event.meta?.custom_data?.client_id || "unknown_client";
+
     
     console.log("📥 Incoming Lemon event:", eventName);
 
