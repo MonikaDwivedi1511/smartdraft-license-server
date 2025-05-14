@@ -199,7 +199,7 @@ app.post("/quota-check", async (req, res) => {
           variant: lemonData.variant,
           orderId: lemonData.orderId,
           expiresAt: lemonData.expiresAt,
-          clientId,
+          clientId: clientId,
           status: "active",
           activatedAt: new Date()
         },
