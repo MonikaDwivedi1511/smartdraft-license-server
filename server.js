@@ -78,33 +78,6 @@ async function activateLicenseKey(licenseKey, instanceName = "smartdraft") {
   }
 }
 
-// async function tryActivateLicense(licenseKey) {
-//   try {
-//     const res = await fetch(`${BASE_URL}/license-keys/activate`, {
-//       method: "POST",
-//       headers: {
-//         Accept: "application/vnd.api+json",
-//         "Content-Type": "application/vnd.api+json",
-//         Authorization: `Bearer ${LEMON_API_KEY}`,
-//       },
-//       body: JSON.stringify({ license_key: licenseKey, activation_name: "smartdraft" }),
-//     });
-
-//     const data = await res.json();
-//     if (data?.data?.attributes) {
-//       const attrs = data.data.attributes;
-//       return {
-//         order_id: attrs.order_id,
-//         expires_at: attrs.expires_at,
-//         variant: attrs.variant_name,
-//       };
-//     }
-//   } catch (err) {
-//     console.error("❌ Activation failed:", err.message);
-//   }
-//   return null;
-// }
-
 async function getLicenseDataFromLemon(licenseKey) {
   try {
     const res = await fetch("https://api.lemonsqueezy.com/v1/licenses/validate", {
@@ -163,121 +136,6 @@ function getPlanDetailsByVariant(variant) {
       return { limit: 200, expiresAt: null }; // Trial or free
   }
 }
-
-// // Endpoint: Activate License
-// app.post("/activate", async (req, res) => {
-//   const { licenseKey } = req.body;
-//   if (!licenseKey) return res.status(400).json({ success: false, error: "Missing key" });
-
-//   const license = await tryActivateLicense(licenseKey);
-//   if (!license) return res.json({ success: false });
-
-//   res.json({ success: true, ...license });
-// });
-
-// Endpoint: Check Quota
-// app.post("/quota-check", async (req, res) => {
-//   const { licenseKey, clientId } = req.body;
-//   res.setHeader("Access-Control-Allow-Origin", "*");
-
-//   if (!licenseKey || !clientId) {
-//     return res.status(400).json({ allowed: false, reason: "missing_params" });
-//   }
-
-//   try {
-//     let license = await LicenseActivation.findOne({ licenseKey });
-
-//     // 🟡 If not found, try syncing from Lemon
-//     if (!license) {
-//       const lemonData = await getLicenseDataFromLemon(licenseKey);
-//       if (!lemonData) return res.json({ allowed: false, reason: "invalid" });
-
-//       license = await LicenseActivation.findOneAndUpdate(
-//         { licenseKey },
-//         {
-//           licenseKey: lemonData.licenseKey,
-//           variant: lemonData.variant,
-//           orderId: lemonData.orderId,
-//           expiresAt: lemonData.expiresAt,
-//           clientId: clientId,
-//           status: "active",
-//           activatedAt: new Date()
-//         },
-//         { upsert: true, new: true }
-//       );
-
-//       console.log(`✅ Synced license from Lemon API → ${licenseKey}`);
-//     }
-
-//     // ❌ Must be active
-//     if (license.status !== "active") {
-//       return res.json({ allowed: false, reason: "inactive_license" });
-//     }
-
-//     // ❌ Check expiry
-//     if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
-//       return res.json({ allowed: false, reason: "expired" });
-//     }
-
-//     // 🔁 Handle device switching
-//     let deviceSwitched = false;
-//     const COOLDOWN_HOURS = 24;
-
-//     if (license.clientId && license.clientId !== clientId) {
-//       const now = new Date();
-//       const lastSwitch = license.lastClientIdSwitchAt ? new Date(license.lastClientIdSwitchAt) : null;
-//       const hoursSinceLastSwitch = lastSwitch ? (now - lastSwitch) / (1000 * 60 * 60) : Infinity;
-
-//       if (hoursSinceLastSwitch < COOLDOWN_HOURS) {
-//         return res.status(403).json({
-//           allowed: false,
-//           reason: "device_switch_cooldown",
-//           message: `Device switch allowed every ${COOLDOWN_HOURS}h. Try again in ${Math.ceil(COOLDOWN_HOURS - hoursSinceLastSwitch)}h.`
-//         });
-//       }
-
-//       console.log(`🔁 Switching clientId: ${license.clientId} → ${clientId}`);
-
-//       license.clientId = clientId;
-//       license.lastClientIdSwitchAt = now;
-//       license.switchCount = (license.switchCount || 0) + 1;
-//       await license.save();
-//       deviceSwitched = true;
-//     }
-
-//     // 📊 Quota usage
-//     const usage = await DraftUsage.aggregate([
-//       { $match: { licenseKey } },
-//       { $group: { _id: null, total: { $sum: "$usedCount" } } }
-//     ]);
-//     const used = usage[0]?.total || 0;
-//     const planDetails = getPlanDetailsByVariant(license.variant);
-//     const limit = planDetails.limit;
-
-//     // ❌ Check if quota exceeded
-//     if (used >= limit) {
-//       return res.json({ allowed: false, reason: "quota_exceeded", used, limit });
-//     }
-
-//     // ✅ Valid
-//     return res.json({
-//       allowed: true,
-//       licenseKey,
-//       used,
-//       limit,
-//       expires_at: license.expiresAt,
-//       variant: license.variant,
-//       order_id: license.orderId,
-//       deviceSwitched
-//     });
-
-//   } catch (err) {
-//     console.error("❌ /quota-check error:", err);
-//     return res.status(500).json({ allowed: false, reason: "server_error" });
-//   }
-// });
-
-// Endpoint: Sync Draft Count
 app.post("/sync-drafts", async (req, res) => {
   const { licenseKey, plan = "trial", variant = "Trial", used } = req.body;
 
@@ -392,6 +250,7 @@ app.post("/lemon-webhook", async (req, res) => {
               clientId: clientId,
               status: "pending",
               activatedAt: new Date(),
+              lemonCreatedAt: new Date(lemonCreatedAt),
               createdAt: new Date(lemonCreatedAt)
             },
             { upsert: true }
@@ -464,184 +323,6 @@ app.post("/lemon-webhook", async (req, res) => {
   }
 });
 
-// app.post("/check-latest-license", async (req, res) => {
-//   const { clientId } = req.body;
-//   if (!clientId) return res.status(400).json({ found: false, reason: "missing_client" });
-
-//   try {
-//     const match = await LicenseActivation.findOne({ clientId, status: "active" }).sort({ createdAt: -1 });
-
-//     if (!match) return res.json({ found: false });
-
-//     res.json({
-//       found: true,
-//       licenseKey: match.licenseKey,
-//       status: match.status,
-//       expiresAt: match.expiresAt,
-//       variant: match.variant
-//     });
-//   } catch (err) {
-//     console.error("❌ Error in /check-latest-license:", err);
-//     res.status(500).json({ found: false });
-//   }
-// });
-
-// app.post("/find-license", async (req, res) => {
-//   const { email } = req.body;
-//   if (!email) return res.status(400).json({ error: "Missing email" });
-
-//   const license = await LicenseActivation.findOne({ customerEmail: email }).sort({ createdAt: -1 });
-//   if (!license) return res.json({ licenseKey: null });
-
-//   return res.json({ licenseKey: license.licenseKey });
-// });
-
-// app.post("/poll-license", async (req, res) => {
-//   const { clientId } = req.body;
-//   if (!clientId) return res.status(400).json({ error: "Missing clientId" });
-
-//   try {
-//     const licenses = await LicenseActivation.find({ clientId, status: "active" }).sort({ createdAt: -1 });
-
-//     if (!licenses || licenses.length === 0) {
-//       console.warn("❌ No active license found for clientId:", clientId);
-//       return res.json({ allowed: false, reason: "not_found" });
-//     }
-
-//     for (const license of licenses) {
-//       const isExpired = license.expiresAt && new Date(license.expiresAt) < new Date();
-//       if (isExpired) continue;
-
-//       const usage = await DraftUsage.aggregate([
-//         { $match: { licenseKey: license.licenseKey } },
-//         { $group: { _id: null, total: { $sum: "$usedCount" } } }
-//       ]);
-//       const used = usage[0]?.total || 0;
-//       const planDetails = getPlanDetailsByVariant(license.variant);
-//       const limit = planDetails.limit;
-
-//       if (used < limit) {
-//         console.log("✅ License eligible:", license.licenseKey);
-//         return res.json({
-//           allowed: true,
-//           licenseKey: license.licenseKey,
-//           used,
-//           limit,
-//           expires_at: license.expiresAt,
-//           variant: license.variant
-//         });
-//       }
-//     }
-
-//     // If we reach here, all licenses are either expired or over quota
-//     return res.json({ allowed: false, reason: "no_valid_license" });
-
-//   } catch (err) {
-//     console.error("❌ /poll-license error:", err);
-//     return res.status(500).json({ allowed: false, reason: "server_error" });
-//   }
-// });
-
-// app.post("/validate-license", async (req, res) => {
-//   const { licenseKey, clientId } = req.body;
-//   res.setHeader("Access-Control-Allow-Origin", "*");
-
-//   if (!clientId) return res.status(400).json({ allowed: false, reason: "missing_clientId" });
-
-//   try {
-//     let license;
-
-//     if (licenseKey) {
-//       license = await LicenseActivation.findOne({ licenseKey });
-
-//       // Try syncing from Lemon if not found
-//       if (!license) {
-//         const lemonData = await getLicenseDataFromLemon(licenseKey);
-//         if (!lemonData) return res.json({ allowed: false, reason: "invalid" });
-
-//         license = await LicenseActivation.findOneAndUpdate(
-//           { licenseKey },
-//           {
-//             licenseKey: lemonData.licenseKey,
-//             variant: lemonData.variant,
-//             orderId: lemonData.orderId,
-//             expiresAt: lemonData.expiresAt,
-//             clientId,
-//             status: "active",
-//             activatedAt: new Date()
-//           },
-//           { upsert: true, new: true }
-//         );
-//       }
-
-//       // Device switch check
-//       if (license.clientId && license.clientId !== clientId) {
-//         const now = new Date();
-//         const hours = (now - new Date(license.lastClientIdSwitchAt || 0)) / (1000 * 60 * 60);
-//         if (hours < 24) {
-//           return res.status(403).json({
-//             allowed: false,
-//             reason: "device_switch_cooldown",
-//             message: `Try again in ${Math.ceil(24 - hours)}h.`
-//           });
-//         }
-//         license.clientId = clientId;
-//         license.lastClientIdSwitchAt = now;
-//         license.switchCount = (license.switchCount || 0) + 1;
-//         await license.save();
-//       }
-
-//     } else {
-//       // No licenseKey → Polling mode
-//       const licenses = await LicenseActivation.find({ clientId, status: "active" }).sort({ createdAt: -1 });
-//       for (const l of licenses) {
-//         if (!l.expiresAt || new Date(l.expiresAt) > new Date()) {
-//           const usage = await DraftUsage.aggregate([
-//             { $match: { licenseKey: l.licenseKey } },
-//             { $group: { _id: null, total: { $sum: "$usedCount" } } }
-//           ]);
-//           const used = usage[0]?.total || 0;
-//           const plan = getPlanDetailsByVariant(l.variant);
-//           if (used < plan.limit) {
-//             license = l;
-//             break;
-//           }
-//         }
-//       }
-//       if (!license) {
-//         return res.json({ allowed: false, reason: "no_valid_license" });
-//       }
-//     }
-
-//     // Final validation
-//     if (license.status !== "active") return res.json({ allowed: false, reason: "inactive_license" });
-//     if (license.expiresAt && new Date(license.expiresAt) < new Date()) return res.json({ allowed: false, reason: "expired" });
-
-//     const usage = await DraftUsage.aggregate([
-//       { $match: { licenseKey: license.licenseKey } },
-//       { $group: { _id: null, total: { $sum: "$usedCount" } } }
-//     ]);
-//     const used = usage[0]?.total || 0;
-//     const planDetails = getPlanDetailsByVariant(license.variant);
-//     const limit = planDetails.limit;
-
-//     if (used >= limit) return res.json({ allowed: false, reason: "quota_exceeded", used, limit });
-
-//     return res.json({
-//       allowed: true,
-//       licenseKey: license.licenseKey,
-//       used,
-//       limit,
-//       expires_at: license.expiresAt,
-//       variant: license.variant
-//     });
-
-//   } catch (err) {
-//     console.error("❌ /validate-license error:", err);
-//     return res.status(500).json({ allowed: false, reason: "server_error" });
-//   }
-// });
-
 app.post("/validate-license", async (req, res) => {
   const { licenseKey, clientId } = req.body;
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -693,7 +374,11 @@ app.post("/validate-license", async (req, res) => {
 
     } else {
       // No licenseKey → Polling mode
-      const licenses = await LicenseActivation.find({ clientId, status: "active" }).sort({ createdAt: -1 });
+      //const licenses = await LicenseActivation.find({ clientId, status: "active" }).sort({ createdAt: -1 });
+      const licenses = await LicenseActivation.find({ clientId, status: "active" }).sort({
+        lemonCreatedAt: -1,
+        createdAt: -1
+      });
       for (const l of licenses) {
         if (!l.expiresAt || new Date(l.expiresAt) > new Date()) {
           const usage = await DraftUsage.aggregate([
