@@ -11,7 +11,7 @@ const LicenseActivationSchema = new mongoose.Schema({
   lastClientIdSwitchAt: { type: Date, default: null },
   switchCount: { type: Number, default: 0 },
   status: { type: String, default: "active" },
-  lemonCreatedAt: { type: Date },
+  lemonCreatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
 module.exports = mongoose.model("LicenseActivation", LicenseActivationSchema);
