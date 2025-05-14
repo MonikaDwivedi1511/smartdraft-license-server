@@ -180,19 +180,18 @@ app.post("/quota-check", async (req, res) => {
   const { licenseKey, clientId } = req.body;
   res.setHeader("Access-Control-Allow-Origin", "*");
 
-  if (!licenseKey) {
-    return res.status(400).json({ allowed: false, reason: "missing_key" });
+  if (!licenseKey || !clientId) {
+    return res.status(400).json({ allowed: false, reason: "missing_params" });
   }
 
   try {
     let license = await LicenseActivation.findOne({ licenseKey });
 
-    // 🔁 If not found in DB, try Lemon validation API
+    // 🟡 If not found, try syncing from Lemon
     if (!license) {
       const lemonData = await getLicenseDataFromLemon(licenseKey);
       if (!lemonData) return res.json({ allowed: false, reason: "invalid" });
 
-      // 💾 Store validated license to DB for next time
       license = await LicenseActivation.findOneAndUpdate(
         { licenseKey },
         {
@@ -210,56 +209,60 @@ app.post("/quota-check", async (req, res) => {
       console.log(`✅ Synced license from Lemon API → ${licenseKey}`);
     }
 
-    if (license.status && license.status !== "active") {
-      return res.json({ allowed: false, reason: "invalid" });
+    // ❌ Must be active
+    if (license.status !== "active") {
+      return res.json({ allowed: false, reason: "inactive_license" });
     }
 
-
-    const isExpired = license.expiresAt && new Date(license.expiresAt) < new Date();
-    if (isExpired) {
+    // ❌ Check expiry
+    if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
       return res.json({ allowed: false, reason: "expired" });
     }
 
-    const COOLDOWN_HOURS = 24;
+    // 🔁 Handle device switching
     let deviceSwitched = false;
+    const COOLDOWN_HOURS = 24;
+
     if (license.clientId && license.clientId !== clientId) {
       const now = new Date();
-    
-      // ⏱️ Check cooldown
-      if (
-        license.lastClientIdSwitchAt &&
-        (now - new Date(license.lastClientIdSwitchAt)) / (1000 * 60 * 60) < COOLDOWN_HOURS
-      ) {
+      const lastSwitch = license.lastClientIdSwitchAt ? new Date(license.lastClientIdSwitchAt) : null;
+      const hoursSinceLastSwitch = lastSwitch ? (now - lastSwitch) / (1000 * 60 * 60) : Infinity;
+
+      if (hoursSinceLastSwitch < COOLDOWN_HOURS) {
         return res.status(403).json({
           allowed: false,
           reason: "device_switch_cooldown",
-          message: `You can switch devices only once every ${COOLDOWN_HOURS} hours.`
+          message: `Device switch allowed every ${COOLDOWN_HOURS}h. Try again in ${Math.ceil(COOLDOWN_HOURS - hoursSinceLastSwitch)}h.`
         });
       }
 
-      console.log(`🔁 Device switch: replacing old clientId ${license.clientId} with ${clientId}`);
-        
-      // ✅ Allow device switch
+      console.log(`🔁 Switching clientId: ${license.clientId} → ${clientId}`);
+
       license.clientId = clientId;
       license.lastClientIdSwitchAt = now;
       license.switchCount = (license.switchCount || 0) + 1;
       await license.save();
-
       deviceSwitched = true;
-      console.log(`🔁 Device switched to ${clientId} at ${now}`);
     }
 
+    // 📊 Quota usage
     const usage = await DraftUsage.aggregate([
       { $match: { licenseKey } },
       { $group: { _id: null, total: { $sum: "$usedCount" } } }
     ]);
-
     const used = usage[0]?.total || 0;
     const planDetails = getPlanDetailsByVariant(license.variant);
     const limit = planDetails.limit;
 
+    // ❌ Check if quota exceeded
+    if (used >= limit) {
+      return res.json({ allowed: false, reason: "quota_exceeded", used, limit });
+    }
+
+    // ✅ Valid
     return res.json({
       allowed: true,
+      licenseKey,
       used,
       limit,
       expires_at: license.expiresAt,
@@ -267,12 +270,12 @@ app.post("/quota-check", async (req, res) => {
       order_id: license.orderId,
       deviceSwitched
     });
+
   } catch (err) {
     console.error("❌ /quota-check error:", err);
     return res.status(500).json({ allowed: false, reason: "server_error" });
   }
 });
-
 
 // Endpoint: Sync Draft Count
 app.post("/sync-drafts", async (req, res) => {
