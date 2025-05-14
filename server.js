@@ -387,7 +387,7 @@ app.post("/lemon-webhook", async (req, res) => {
               orderId,
               variant,
               expiresAt,
-              clientId,
+              clientId: clientId,
               status: "pending",
               activatedAt: new Date(),
               createdAt: new Date(lemonCreatedAt)
@@ -418,7 +418,7 @@ app.post("/lemon-webhook", async (req, res) => {
         await new Promise(resolve => setTimeout(resolve, 3000));
         
         await LicenseActivation.updateMany(
-          { clientId, status: "active", orderId: { $ne: order_id } },
+          { clientId: clientId, status: "active", orderId: { $ne: order_id } },
           { $set: { status: "expired" } }
         );
         
@@ -429,7 +429,7 @@ app.post("/lemon-webhook", async (req, res) => {
           userEmail: user_email,
           expiresAt: new Date(renews_at),
           status: "active",
-          clientId
+          clientId: clientId
         };
 
         const result = await LicenseActivation.findOneAndUpdate(
@@ -540,6 +540,106 @@ app.post("/lemon-webhook", async (req, res) => {
 //   }
 // });
 
+// app.post("/validate-license", async (req, res) => {
+//   const { licenseKey, clientId } = req.body;
+//   res.setHeader("Access-Control-Allow-Origin", "*");
+
+//   if (!clientId) return res.status(400).json({ allowed: false, reason: "missing_clientId" });
+
+//   try {
+//     let license;
+
+//     if (licenseKey) {
+//       license = await LicenseActivation.findOne({ licenseKey });
+
+//       // Try syncing from Lemon if not found
+//       if (!license) {
+//         const lemonData = await getLicenseDataFromLemon(licenseKey);
+//         if (!lemonData) return res.json({ allowed: false, reason: "invalid" });
+
+//         license = await LicenseActivation.findOneAndUpdate(
+//           { licenseKey },
+//           {
+//             licenseKey: lemonData.licenseKey,
+//             variant: lemonData.variant,
+//             orderId: lemonData.orderId,
+//             expiresAt: lemonData.expiresAt,
+//             clientId,
+//             status: "active",
+//             activatedAt: new Date()
+//           },
+//           { upsert: true, new: true }
+//         );
+//       }
+
+//       // Device switch check
+//       if (license.clientId && license.clientId !== clientId) {
+//         const now = new Date();
+//         const hours = (now - new Date(license.lastClientIdSwitchAt || 0)) / (1000 * 60 * 60);
+//         if (hours < 24) {
+//           return res.status(403).json({
+//             allowed: false,
+//             reason: "device_switch_cooldown",
+//             message: `Try again in ${Math.ceil(24 - hours)}h.`
+//           });
+//         }
+//         license.clientId = clientId;
+//         license.lastClientIdSwitchAt = now;
+//         license.switchCount = (license.switchCount || 0) + 1;
+//         await license.save();
+//       }
+
+//     } else {
+//       // No licenseKey → Polling mode
+//       const licenses = await LicenseActivation.find({ clientId, status: "active" }).sort({ createdAt: -1 });
+//       for (const l of licenses) {
+//         if (!l.expiresAt || new Date(l.expiresAt) > new Date()) {
+//           const usage = await DraftUsage.aggregate([
+//             { $match: { licenseKey: l.licenseKey } },
+//             { $group: { _id: null, total: { $sum: "$usedCount" } } }
+//           ]);
+//           const used = usage[0]?.total || 0;
+//           const plan = getPlanDetailsByVariant(l.variant);
+//           if (used < plan.limit) {
+//             license = l;
+//             break;
+//           }
+//         }
+//       }
+//       if (!license) {
+//         return res.json({ allowed: false, reason: "no_valid_license" });
+//       }
+//     }
+
+//     // Final validation
+//     if (license.status !== "active") return res.json({ allowed: false, reason: "inactive_license" });
+//     if (license.expiresAt && new Date(license.expiresAt) < new Date()) return res.json({ allowed: false, reason: "expired" });
+
+//     const usage = await DraftUsage.aggregate([
+//       { $match: { licenseKey: license.licenseKey } },
+//       { $group: { _id: null, total: { $sum: "$usedCount" } } }
+//     ]);
+//     const used = usage[0]?.total || 0;
+//     const planDetails = getPlanDetailsByVariant(license.variant);
+//     const limit = planDetails.limit;
+
+//     if (used >= limit) return res.json({ allowed: false, reason: "quota_exceeded", used, limit });
+
+//     return res.json({
+//       allowed: true,
+//       licenseKey: license.licenseKey,
+//       used,
+//       limit,
+//       expires_at: license.expiresAt,
+//       variant: license.variant
+//     });
+
+//   } catch (err) {
+//     console.error("❌ /validate-license error:", err);
+//     return res.status(500).json({ allowed: false, reason: "server_error" });
+//   }
+// });
+
 app.post("/validate-license", async (req, res) => {
   const { licenseKey, clientId } = req.body;
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -639,7 +739,6 @@ app.post("/validate-license", async (req, res) => {
     return res.status(500).json({ allowed: false, reason: "server_error" });
   }
 });
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
