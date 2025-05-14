@@ -375,22 +375,39 @@ app.post("/validate-license", async (req, res) => {
     } else {
       // No licenseKey → Polling mode
       //const licenses = await LicenseActivation.find({ clientId, status: "active" }).sort({ createdAt: -1 });
-      const licenses = await LicenseActivation.find({ clientId, status: "active" }).sort({
-        lemonCreatedAt: -1,
-        createdAt: -1
-      });
+      const licenses = await LicenseActivation.find({
+        clientId,
+        status: "active",
+        lemonCreatedAt: { $exists: true }
+      })
+      .sort({ lemonCreatedAt: -1 });
+      // for (const l of licenses) {
+      //   if (!l.expiresAt || new Date(l.expiresAt) > new Date()) {
+      //     const usage = await DraftUsage.aggregate([
+      //       { $match: { licenseKey: l.licenseKey } },
+      //       { $group: { _id: null, total: { $sum: "$usedCount" } } }
+      //     ]);
+      //     const used = usage[0]?.total || 0;
+      //     const plan = getPlanDetailsByVariant(l.variant);
+      //     if (used < plan.limit) {
+      //       license = l;
+      //       break;
+      //     }
+      //   }
+      // }
       for (const l of licenses) {
-        if (!l.expiresAt || new Date(l.expiresAt) > new Date()) {
-          const usage = await DraftUsage.aggregate([
-            { $match: { licenseKey: l.licenseKey } },
-            { $group: { _id: null, total: { $sum: "$usedCount" } } }
-          ]);
-          const used = usage[0]?.total || 0;
-          const plan = getPlanDetailsByVariant(l.variant);
-          if (used < plan.limit) {
-            license = l;
-            break;
-          }
+        // Ensure it’s not already used significantly (e.g., >10% used)
+        const usage = await DraftUsage.aggregate([
+          { $match: { licenseKey: l.licenseKey } },
+          { $group: { _id: null, total: { $sum: "$usedCount" } } }
+        ]);
+        const used = usage[0]?.total || 0;
+        const plan = getPlanDetailsByVariant(l.variant);
+        const limit = plan.limit;
+      
+        if (used === 0) {
+          license = l;
+          break;
         }
       }
       if (!license) {
