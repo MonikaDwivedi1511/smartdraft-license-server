@@ -10,7 +10,8 @@ const LicenseActivationSchema = new mongoose.Schema({
   clientId: { type: String, required: true}, // ✅ Add this line
   lastClientIdSwitchAt: { type: Date, default: null },
   switchCount: { type: Number, default: 0 },
-  status: { type: String, default: "active" }
+  status: { type: String, default: "active" },
+  lemonCreatedAt: { type: Date },
 }, { timestamps: true });
 
 module.exports = mongoose.model("LicenseActivation", LicenseActivationSchema);
