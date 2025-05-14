@@ -494,10 +494,24 @@ app.post("/poll-license", async (req, res) => {
 
   const license = await LicenseActivation.findOne({ clientId }).sort({ createdAt: -1 });
   console.log("License details from server - find variant", license);
+
   if (!license) {
-  console.warn("❌ No license found for clientId:", clientId);
-  return res.json({ allowed: false });
-}
+    console.warn("❌ No license found for clientId:", clientId);
+    return res.json({ allowed: false, reason: "not_found" });
+  }
+
+  if (license.status === "pending") {
+    return res.json({ allowed: false, reason: "pending_enrichment" });
+  }
+
+  if (license.status !== "active") {
+    return res.json({ allowed: false, reason: "inactive_license" });
+  }
+
+  const isExpired = license.expiresAt && new Date(license.expiresAt) < new Date();
+  if (isExpired) {
+    return res.json({ allowed: false, reason: "expired" });
+  }
 
   const usage = await DraftUsage.aggregate([
     { $match: { licenseKey: license.licenseKey } },
@@ -505,12 +519,17 @@ app.post("/poll-license", async (req, res) => {
   ]);
   const used = usage[0]?.total || 0;
   const planDetails = getPlanDetailsByVariant(license.variant);
+  const limit = planDetails.limit;
+
+  if (used >= limit) {
+    return res.json({ allowed: false, reason: "quota_exceeded", used, limit });
+  }
 
   return res.json({
     allowed: true,
     licenseKey: license.licenseKey,
     used,
-    limit: planDetails.limit,
+    limit,
     expires_at: license.expiresAt,
     variant: license.variant
   });
