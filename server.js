@@ -412,7 +412,7 @@ app.post("/lemon-webhook", async (req, res) => {
         await new Promise(resolve => setTimeout(resolve, 3000));
         
         await LicenseActivation.updateMany(
-          { clientId, status: "active", orderId: { $ne: orderId } },
+          { clientId, status: "active", orderId: { $ne: order_id } },
           { $set: { status: "expired" } }
         );
         
