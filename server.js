@@ -331,7 +331,7 @@ app.post("/validate-license", async (req, res) => {
 
   try {
     let license;
-
+    console.log("License:", licenseKey, " clientId:", clientId);
     if (licenseKey) {
       license = await LicenseActivation.findOne({ licenseKey });
 
