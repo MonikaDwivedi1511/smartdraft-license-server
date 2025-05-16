@@ -17,6 +17,7 @@ app.use(cors({
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"]
 }));
+app.options("*", cors()); // Handle preflight
 
 
 // Capture raw body for webhook verification
