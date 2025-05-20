@@ -137,16 +137,41 @@ function getPlanDetailsByVariant(variant) {
       return { limit: 200, expiresAt: null }; // Trial or free
   }
 }
-app.post("/sync-drafts", async (req, res) => {
-  const { licenseKey, plan = "trial", variant = "Trial", used } = req.body;
+// app.post("/sync-drafts", async (req, res) => {
+//   const { licenseKey, plan = "trial", variant = "Trial", used } = req.body;
 
-  if (!licenseKey || used == null) {
-    return res.status(400).json({ success: false, error: "Missing licenseKey or used count" });
+//   if (!licenseKey || used == null) {
+//     return res.status(400).json({ success: false, error: "Missing licenseKey or used count" });
+//   }
+
+//   try {
+//     await DraftUsage.create({
+//       licenseKey,
+//       plan,
+//       variant,
+//       usedCount: used,
+//       timestamp: new Date()
+//     });
+
+//     return res.json({ success: true });
+//   } catch (err) {
+//     console.error("❌ /sync-drafts error:", err);
+//     return res.status(500).json({ success: false });
+//   }
+// });
+
+app.post("/sync-drafts", async (req, res) => {
+  const { licenseKey, plan = "trial", variant = "Trial", used, clientId } = req.body;
+
+  // 🛑 Validate required fields
+  if (!licenseKey || used == null || !clientId) {
+    return res.status(400).json({ success: false, error: "Missing licenseKey, clientId or used count" });
   }
 
   try {
     await DraftUsage.create({
       licenseKey,
+      clientId,                  // ✅ NEW: Track per device
       plan,
       variant,
       usedCount: used,
@@ -159,7 +184,6 @@ app.post("/sync-drafts", async (req, res) => {
     return res.status(500).json({ success: false });
   }
 });
-
 
 // Endpoint: Track Event
 app.post("/track-event", async (req, res) => {
