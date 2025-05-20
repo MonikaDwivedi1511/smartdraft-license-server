@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 
 const DraftUsageSchema = new mongoose.Schema({
   licenseKey: String,
+  clientId: String,                // ✅ NEW: Track usage per client
   plan: String,
   variant: String,
   usedCount: Number,
