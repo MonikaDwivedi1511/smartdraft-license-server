@@ -7,6 +7,7 @@ const DraftUsageSchema = new mongoose.Schema({
   plan: String,
   variant: String,
   usedCount: Number,
+  hostname: String, 
   timestamp: { type: Date, default: Date.now }
 });
 
