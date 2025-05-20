@@ -161,7 +161,7 @@ function getPlanDetailsByVariant(variant) {
 // });
 
 app.post("/sync-drafts", async (req, res) => {
-  const { licenseKey, plan = "trial", variant = "Trial", used, clientId } = req.body;
+  const { licenseKey, plan = "trial", variant = "Trial", used, clientId, hostname } = req.body;
 
   // 🛑 Validate required fields
   if (!licenseKey || used == null || !clientId) {
@@ -175,6 +175,7 @@ app.post("/sync-drafts", async (req, res) => {
       plan,
       variant,
       usedCount: used,
+      hostname,
       timestamp: new Date()
     });
 
