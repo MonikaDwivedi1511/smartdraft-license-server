@@ -422,11 +422,21 @@ app.post("/validate-license", async (req, res) => {
       // }
       for (const l of licenses) {
         // Ensure it’s not already used significantly (e.g., >10% used)
-        const usage = await DraftUsage.aggregate([
-          { $match: { licenseKey: l.licenseKey } },
-          { $group: { _id: null, total: { $sum: "$usedCount" } } }
-        ]);
-        const used = usage[0]?.total || 0;
+        const maxUsage = await DraftUsage.findOne({
+          licenseKey: license.licenseKey,
+          clientId
+        })
+        .sort({ usedCount: -1 }) // Highest first
+        .select("usedCount")
+        .lean();
+        
+        const used = maxUsage?.usedCount || 0;
+
+        // const usage = await DraftUsage.aggregate([
+        //   { $match: { licenseKey: l.licenseKey } },
+        //   { $group: { _id: null, total: { $sum: "$usedCount" } } }
+        // ]);
+        // const used = usage[0]?.total || 0;
         const plan = getPlanDetailsByVariant(l.variant);
         const limit = plan.limit;
       
@@ -444,11 +454,21 @@ app.post("/validate-license", async (req, res) => {
     if (license.status !== "active") return res.json({ allowed: false, reason: "inactive_license" });
     if (license.expiresAt && new Date(license.expiresAt) < new Date()) return res.json({ allowed: false, reason: "expired" });
 
-    const usage = await DraftUsage.aggregate([
-      { $match: { licenseKey: license.licenseKey } },
-      { $group: { _id: null, total: { $sum: "$usedCount" } } }
-    ]);
-    const used = usage[0]?.total || 0;
+    // const usage = await DraftUsage.aggregate([
+    //   { $match: { licenseKey: license.licenseKey } },
+    //   { $group: { _id: null, total: { $sum: "$usedCount" } } }
+    // ]);
+    // const used = usage[0]?.total || 0;
+    const maxUsage = await DraftUsage.findOne({
+      licenseKey: license.licenseKey,
+      clientId
+    })
+    .sort({ usedCount: -1 }) // Highest first
+    .select("usedCount")
+    .lean();
+    
+    const used = maxUsage?.usedCount || 0;
+
     const planDetails = getPlanDetailsByVariant(license.variant);
     const limit = planDetails.limit;
 
