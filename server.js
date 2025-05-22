@@ -135,8 +135,7 @@ function getPlanDetailsByVariant(variant) {
 
 app.post("/sync-drafts", async (req, res) => {
   const { licenseKey, plan = "trial", variant = "Trial", used, clientId, hostname } = req.body;
-  console.log("🌐 Hostname received:", hostname);
-
+  
   // 🛑 Validate required fields
   if (!licenseKey || used == null || !clientId) {
     return res.status(400).json({ success: false, error: "Missing licenseKey, clientId or used count" });
@@ -204,11 +203,8 @@ app.post("/lemon-webhook", async (req, res) => {
     const event = JSON.parse(payload);
     const meta = event.meta || {}; // ✅ add this
     const eventName = meta?.event_name;
-    console.log("Event:", event);
     const clientId = event.meta?.custom_data?.client_id || "unknown_client";
     
-    console.log("📥 Incoming Lemon event:", eventName);
-
     switch (eventName) {
       case "license_key_created": { 
           const licenseKey = event.data?.attributes?.key;
@@ -250,7 +246,6 @@ app.post("/lemon-webhook", async (req, res) => {
             { upsert: true }
           );
         
-          console.log(`✅ License ${licenseKey} created + pending enrichment`);
           break;
         }
 
@@ -322,7 +317,6 @@ app.post("/validate-license", async (req, res) => {
 
   try {
     let license;
-    console.log("License:", licenseKey, " clientId:", clientId);
     if (licenseKey) {
       license = await LicenseActivation.findOne({ licenseKey });
 
