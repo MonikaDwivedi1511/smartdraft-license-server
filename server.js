@@ -5,7 +5,6 @@ const cors = require("cors");
 const crypto = require("crypto"); // For signature verification
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-//const QuotaLog = require("./models/QuotaLog");
 const DraftUsage = require("./models/DraftUsage");
 const Event = require("./models/Event");
 const LicenseActivation = require("./models/LicenseActivation");
@@ -28,9 +27,6 @@ const rawBodySaver = (req, res, buf) => {
 };
 
 app.use(bodyParser.json({ verify: rawBodySaver }));
-
-//app.use(bodyParser.json());
-
 const trackEventRoute = require("./routes/trackEvent");
 app.use("/", trackEventRoute);
 
@@ -46,7 +42,6 @@ db.on("error", console.error);
 
 // LemonSqueezy License API
 const LEMON_API_KEY = process.env.LEMON_API_KEY;
-//const BASE_URL = "https://api.lemonsqueezy.com/v1";
 
 async function activateLicenseKey(licenseKey, instanceName = "smartdraft") {
   try {
@@ -137,28 +132,6 @@ function getPlanDetailsByVariant(variant) {
       return { limit: 200, expiresAt: null }; // Trial or free
   }
 }
-// app.post("/sync-drafts", async (req, res) => {
-//   const { licenseKey, plan = "trial", variant = "Trial", used } = req.body;
-
-//   if (!licenseKey || used == null) {
-//     return res.status(400).json({ success: false, error: "Missing licenseKey or used count" });
-//   }
-
-//   try {
-//     await DraftUsage.create({
-//       licenseKey,
-//       plan,
-//       variant,
-//       usedCount: used,
-//       timestamp: new Date()
-//     });
-
-//     return res.json({ success: true });
-//   } catch (err) {
-//     console.error("❌ /sync-drafts error:", err);
-//     return res.status(500).json({ success: false });
-//   }
-// });
 
 app.post("/sync-drafts", async (req, res) => {
   const { licenseKey, plan = "trial", variant = "Trial", used, clientId, hostname } = req.body;
@@ -232,12 +205,7 @@ app.post("/lemon-webhook", async (req, res) => {
     const meta = event.meta || {}; // ✅ add this
     const eventName = meta?.event_name;
     console.log("Event:", event);
-    // const clientId = meta?.custom_data?.client_id ||
-    //   event.data?.attributes?.user_email ||
-    //   event.data?.attributes?.user_name ||
-    //   "unknown_client";
     const clientId = event.meta?.custom_data?.client_id || "unknown_client";
-
     
     console.log("📥 Incoming Lemon event:", eventName);
 
@@ -266,7 +234,6 @@ app.post("/lemon-webhook", async (req, res) => {
             { $set: { status: "expired" } }
           );
           
-
           await LicenseActivation.findOneAndUpdate(
             { licenseKey },
             {
@@ -287,7 +254,6 @@ app.post("/lemon-webhook", async (req, res) => {
           break;
         }
 
-
       case "subscription_created": {
         const {
           order_id,
@@ -304,13 +270,11 @@ app.post("/lemon-webhook", async (req, res) => {
       
         // ⏳ Wait 3 seconds to let license_key_created run first
         await new Promise(resolve => setTimeout(resolve, 3000));
-        
         await LicenseActivation.updateMany(
           { clientId: clientId, status: "active", orderId: { $ne: order_id } },
           { $set: { status: "expired" } }
         );
-        
-        
+               
         const update = {
           variant: variant_name,
           userName: user_name,
@@ -401,27 +365,13 @@ app.post("/validate-license", async (req, res) => {
 
     } else {
       // No licenseKey → Polling mode
-      //const licenses = await LicenseActivation.find({ clientId, status: "active" }).sort({ createdAt: -1 });
       const licenses = await LicenseActivation.find({
         clientId,
         status: "active",
         lemonCreatedAt: { $exists: true }
       })
       .sort({ lemonCreatedAt: -1 });
-      // for (const l of licenses) {
-      //   if (!l.expiresAt || new Date(l.expiresAt) > new Date()) {
-      //     const usage = await DraftUsage.aggregate([
-      //       { $match: { licenseKey: l.licenseKey } },
-      //       { $group: { _id: null, total: { $sum: "$usedCount" } } }
-      //     ]);
-      //     const used = usage[0]?.total || 0;
-      //     const plan = getPlanDetailsByVariant(l.variant);
-      //     if (used < plan.limit) {
-      //       license = l;
-      //       break;
-      //     }
-      //   }
-      // }
+
       for (const l of licenses) {
         // Ensure it’s not already used significantly (e.g., >10% used)
         const maxUsage = await DraftUsage.findOne({
@@ -433,12 +383,6 @@ app.post("/validate-license", async (req, res) => {
         .lean();
         
         const used = maxUsage?.usedCount || 0;
-
-        // const usage = await DraftUsage.aggregate([
-        //   { $match: { licenseKey: l.licenseKey } },
-        //   { $group: { _id: null, total: { $sum: "$usedCount" } } }
-        // ]);
-        // const used = usage[0]?.total || 0;
         const plan = getPlanDetailsByVariant(l.variant);
         const limit = plan.limit;
       
@@ -456,11 +400,6 @@ app.post("/validate-license", async (req, res) => {
     if (license.status !== "active") return res.json({ allowed: false, reason: "inactive_license" });
     if (license.expiresAt && new Date(license.expiresAt) < new Date()) return res.json({ allowed: false, reason: "expired" });
 
-    // const usage = await DraftUsage.aggregate([
-    //   { $match: { licenseKey: license.licenseKey } },
-    //   { $group: { _id: null, total: { $sum: "$usedCount" } } }
-    // ]);
-    // const used = usage[0]?.total || 0;
     const maxUsage = await DraftUsage.findOne({
       licenseKey: license.licenseKey,
       clientId
@@ -490,11 +429,6 @@ app.post("/validate-license", async (req, res) => {
     return res.status(500).json({ allowed: false, reason: "server_error" });
   }
 });
-
-app.get("/ping", (req, res) => {
-  res.send("pong");
-});
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
