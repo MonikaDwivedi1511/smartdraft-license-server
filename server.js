@@ -317,6 +317,7 @@ app.post("/lemon-webhook", async (req, res) => {
 
 app.post("/validate-license", async (req, res) => {
   const { licenseKey, clientId } = req.body;
+  console.log("license: ", license,"Client ID: ", clientId);
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   if (!clientId) return res.status(400).json({ allowed: false, reason: "missing_clientId" });
