@@ -18,6 +18,9 @@ app.use(cors({
 }));
 app.options("*", cors()); // Handle preflight
 
+app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(__dirname, "privacy.html"));
+});
 
 // Capture raw body for webhook verification
 const rawBodySaver = (req, res, buf) => {
