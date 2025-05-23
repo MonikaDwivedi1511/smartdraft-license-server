@@ -1,6 +1,7 @@
 // Unified and improved SmartDraft backend server.js with correct activation + validation
 
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const crypto = require("crypto"); // For signature verification
 const bodyParser = require("body-parser");
