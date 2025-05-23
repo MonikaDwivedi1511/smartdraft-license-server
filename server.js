@@ -11,6 +11,10 @@ const LicenseActivation = require("./models/LicenseActivation");
 require("dotenv").config();
 
 const app = express();
+app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(__dirname, "privacy.html"));
+});
+
 app.use(cors({
   origin: "*", // Or specify exact origins like "https://mail.google.com"
   methods: ["GET", "POST"],
@@ -18,9 +22,7 @@ app.use(cors({
 }));
 app.options("*", cors()); // Handle preflight
 
-app.get("/privacy", (req, res) => {
-  res.sendFile(path.join(__dirname, "privacy.html"));
-});
+
 
 // Capture raw body for webhook verification
 const rawBodySaver = (req, res, buf) => {
